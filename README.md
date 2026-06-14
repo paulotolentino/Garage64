@@ -20,13 +20,36 @@ Aplicação web para catalogação e gerenciamento de coleções de miniaturas d
 
 ## Instalação
 
-### 1. Banco de dados
+### Opção A — Instalador via navegador (recomendado, sem acesso à linha de comando)
+
+1. **Faça o upload** de todos os arquivos do projeto para o servidor via painel de hospedagem (gerenciador de arquivos, FTP, Git deploy, etc.).
+2. **Garanta as permissões de escrita** nas pastas `uploads/` e `includes/` (chmod 755 ou equivalente no painel).
+3. **Acesse o instalador** no seu navegador:
+   ```
+   https://seusite.com/install.php
+   ```
+4. O instalador irá:
+   - Verificar automaticamente os requisitos (PHP, extensões, permissões).
+   - Exibir um formulário para preencher as credenciais do banco de dados, URL do site e usuário admin.
+   - Criar o banco de dados e executar o schema.
+   - Gerar `includes/config.local.php` com suas configurações.
+   - Criar o arquivo `installed.lock`, bloqueando o acesso ao instalador permanentemente.
+5. Após a conclusão, acesse `/` (galeria pública) ou `/admin/` (painel administrativo).
+
+> **Segurança:** assim que `installed.lock` existir, qualquer acesso a `/install.php` retorna 403.
+> Você pode também excluir `install.php` do servidor após a instalação.
+
+---
+
+### Opção B — Instalação via linha de comando
+
+#### 1. Banco de dados
 
 ```bash
 mysql -u root -p < database/schema.sql
 ```
 
-### 2. Configuração
+#### 2. Configuração
 
 Copie e edite o arquivo de configuração:
 
@@ -35,19 +58,19 @@ cp includes/config.php includes/config.local.php
 # Edite includes/config.local.php com suas credenciais
 ```
 
-### 3. Criar o usuário admin
+#### 3. Criar o usuário admin
 
 ```bash
 php setup.php
 ```
 
-### 4. Permissões
+#### 4. Permissões
 
 ```bash
 chmod 755 uploads/
 ```
 
-### 5. Servidor web
+#### 5. Servidor web
 
 Configure seu Apache ou Nginx para apontar para o diretório raiz do projeto com suporte a `.htaccess` (AllowOverride All).
 
@@ -56,7 +79,9 @@ Configure seu Apache ou Nginx para apontar para o diretório raiz do projeto com
 ```
 ├── index.php               # Galeria pública
 ├── miniature.php           # Detalhes da miniatura (público)
+├── install.php             # Instalador via navegador (bloqueado após uso)
 ├── setup.php               # Script de configuração inicial (CLI)
+├── installed.lock          # Criado pelo instalador; bloqueia /install.php
 ├── admin/
 │   ├── index.php           # Dashboard
 │   ├── login.php

@@ -18,6 +18,12 @@ DirectoryIndex index.php
     Require all denied
 </FilesMatch>
 
+# Block the web installer once installed.lock exists
+<IfModule mod_rewrite.c>
+    RewriteCond %{DOCUMENT_ROOT}/installed.lock -f
+    RewriteRule ^install\.php$ - [F,L]
+</IfModule>
+
 # Protect includes directory
 <IfModule mod_rewrite.c>
     RewriteEngine On
