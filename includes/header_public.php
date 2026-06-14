@@ -20,7 +20,10 @@
         <div class="collapse navbar-collapse" id="navMain">
             <ul class="navbar-nav ms-auto">
                 <li class="nav-item">
-                    <a class="nav-link" href="<?= h(APP_URL) ?>/"><i class="fa fa-th me-1"></i>Coleção</a>
+                    <a class="nav-link" href="/"><i class="fa fa-th me-1"></i>Coleção</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/login.php"><i class="fa fa-lock me-1"></i>Entrar</a>
                 </li>
             </ul>
         </div>

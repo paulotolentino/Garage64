@@ -289,7 +289,23 @@ function emotional_rating_label(int $rating): string {
 
 function photo_url(?string $file_path): string {
     if (!$file_path) {
-        return APP_URL . '/assets/img/no-photo.svg';
+        return '/assets/img/no-photo.svg';
     }
-    return UPLOADS_URL . $file_path;
+    return '/uploads/' . $file_path;
+}
+
+// ─── Recent miniatures ───────────────────────────────────────────────────────
+
+function get_recent_miniatures(int $limit = 5): array {
+    $stmt = db()->prepare(
+        'SELECT m.*, c.name AS category_name,
+                p.file_path AS primary_photo
+         FROM miniatures m
+         LEFT JOIN categories c ON m.category_id = c.id
+         LEFT JOIN miniature_photos p ON p.miniature_id = m.id AND p.is_primary = 1
+         ORDER BY m.created_at DESC
+         LIMIT ?'
+    );
+    $stmt->execute([$limit]);
+    return $stmt->fetchAll();
 }
