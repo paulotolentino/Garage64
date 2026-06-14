@@ -291,6 +291,10 @@ function photo_url(?string $file_path): string {
     if (!$file_path) {
         return '/assets/img/no-photo.svg';
     }
+    // Guard against path traversal: only allow id/hexname.ext patterns.
+    if (!preg_match('#^\d+/[a-f0-9]+\.(jpg|jpeg|png|webp|gif)$#i', $file_path)) {
+        return '/assets/img/no-photo.svg';
+    }
     return '/uploads/' . $file_path;
 }
 

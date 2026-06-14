@@ -5,9 +5,9 @@ require_once __DIR__ . '/../includes/functions.php';
 
 require_login();
 
-$stats          = get_stats();
-$recent_minis   = get_recent_miniatures(10);
-$page_title     = 'Dashboard';
+$stats               = get_stats();
+$recent_miniatures   = get_recent_miniatures(10);
+$page_title          = 'Dashboard';
 
 require_once __DIR__ . '/../includes/header_admin.php';
 ?>
@@ -118,7 +118,7 @@ require_once __DIR__ . '/../includes/header_admin.php';
 <!-- Recent Miniatures -->
 <div class="mt-5">
     <h2 class="h5 text-secondary mb-3"><i class="fa fa-clock me-1"></i>Últimas Miniaturas Adicionadas</h2>
-    <?php if (empty($recent_minis)): ?>
+    <?php if (empty($recent_miniatures)): ?>
         <div class="text-secondary">Nenhuma miniatura cadastrada ainda. <a href="/admin/miniatures.php?action=add" class="text-warning">Adicionar agora</a>.</div>
     <?php else: ?>
         <div class="table-responsive">
@@ -134,7 +134,7 @@ require_once __DIR__ . '/../includes/header_admin.php';
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($recent_minis as $m): ?>
+                    <?php foreach ($recent_miniatures as $m): ?>
                         <tr>
                             <td>
                                 <img src="<?= e(photo_url($m['primary_photo'])) ?>"
