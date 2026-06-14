@@ -97,7 +97,7 @@ function check_requirements(): array
          $root_writable ? 'OK' : 'Necessário para criar installed.lock');
 
     if (!is_dir($uploads_dir)) {
-        @mkdir($uploads_dir, 0750, true);
+        @mkdir($uploads_dir, 0755, true);
     }
     $uploads_writable = is_dir($uploads_dir) && is_writable($uploads_dir);
     $add('Pasta uploads/ com permissão de escrita', $uploads_writable,
