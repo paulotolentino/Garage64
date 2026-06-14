@@ -18,9 +18,11 @@ DirectoryIndex index.php
     Require all denied
 </FilesMatch>
 
-# Block the web installer once installed.lock exists
+# Block the web installer once installed.lock exists.
+# Uses REQUEST_FILENAME to derive the app directory, so it works in subdirectories too.
 <IfModule mod_rewrite.c>
-    RewriteCond %{DOCUMENT_ROOT}/installed.lock -f
+    RewriteCond %{REQUEST_FILENAME} ^(.+/)install\.php$
+    RewriteCond %1installed.lock -f
     RewriteRule ^install\.php$ - [F,L]
 </IfModule>
 
