@@ -27,8 +27,8 @@ require_once __DIR__ . '/../includes/header_admin.php';
     <?php foreach ($stats['by_status'] as $s): ?>
     <div class="col-6 col-sm-4 col-xl-2">
         <div class="card bg-dark border-secondary h-100">
-            <div class="card-body text-center py-3">
-                <div class="h3 mb-0"><?= $s['total'] ?></div>
+            <div class="card-body text-center py-3 text-light">
+                <div class="h3 mb-0 text-warning"><?= $s['total'] ?></div>
                 <div class="text-secondary small"><?= h(status_label($s['status'])) ?></div>
             </div>
         </div>
@@ -46,7 +46,7 @@ require_once __DIR__ . '/../includes/header_admin.php';
             <div class="card-body p-0">
                 <ul class="list-group list-group-flush bg-dark">
                     <?php foreach ($stats['by_manufacturer'] as $row): ?>
-                        <li class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center">
+                        <li class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center text-light">
                             <span><?= e($row['manufacturer']) ?></span>
                             <span class="badge bg-warning text-dark"><?= $row['total'] ?></span>
                         </li>
@@ -68,7 +68,7 @@ require_once __DIR__ . '/../includes/header_admin.php';
             <div class="card-body p-0">
                 <ul class="list-group list-group-flush bg-dark">
                     <?php foreach ($stats['by_scale'] as $row): ?>
-                        <li class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center">
+                        <li class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center text-light">
                             <span><?= e($row['scale']) ?></span>
                             <span class="badge bg-warning text-dark"><?= $row['total'] ?></span>
                         </li>
@@ -90,7 +90,7 @@ require_once __DIR__ . '/../includes/header_admin.php';
             <div class="card-body p-0">
                 <ul class="list-group list-group-flush bg-dark">
                     <?php foreach ($stats['by_category'] as $row): ?>
-                        <li class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center">
+                        <li class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center text-light">
                             <span><?= e($row['name'] ?? 'Sem categoria') ?></span>
                             <span class="badge bg-warning text-dark"><?= $row['total'] ?></span>
                         </li>

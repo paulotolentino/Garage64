@@ -295,6 +295,9 @@ function photo_url(?string $file_path): string {
     if (!preg_match('#^\d+/[a-f0-9]+\.(jpg|jpeg|png|webp|gif)$#i', $file_path)) {
         return '/assets/img/no-photo.svg';
     }
+    if (!is_file(UPLOADS_DIR . $file_path)) {
+        return '/assets/img/no-photo.svg';
+    }
     return '/uploads/' . $file_path;
 }
 
