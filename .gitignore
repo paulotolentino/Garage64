@@ -1,0 +1,16 @@
+# Configuration overrides (contain secrets)
+includes/config.local.php
+
+# Uploaded files (user content)
+uploads/*/
+
+# OS and editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+  <rect width="400" height="300" fill="#111318"/>
+  <g opacity="0.25">
+    <rect x="100" y="120" width="200" height="80" rx="8" fill="#555"/>
+    <rect x="130" y="95" width="140" height="45" rx="6" fill="#555"/>
+    <circle cx="145" cy="210" r="22" fill="#333" stroke="#666" stroke-width="4"/>
+    <circle cx="255" cy="210" r="22" fill="#333" stroke="#666" stroke-width="4"/>
+    <circle cx="145" cy="210" r="10" fill="#555"/>
+    <circle cx="255" cy="210" r="10" fill="#555"/>
+  </g>
+  <text x="200" y="260" font-family="system-ui,sans-serif" font-size="13" fill="#444" text-anchor="middle">Sem foto</text>
+</svg>

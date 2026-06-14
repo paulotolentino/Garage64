@@ -1,0 +1,170 @@
+/* ═══════════════════════════════════════════════
+   Garage64 — Main Stylesheet
+   Dark, clean, automotive collector feel
+═══════════════════════════════════════════════ */
+
+:root {
+    --g64-yellow: #f0a500;
+    --g64-dark:   #111318;
+    --g64-card:   #1a1d24;
+    --g64-border: #2e3140;
+}
+
+/* ── Base ──────────────────────────────────────── */
+body {
+    background-color: var(--g64-dark);
+    color: #d0d3de;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+a {
+    color: var(--g64-yellow);
+}
+a:hover {
+    color: #ffc840;
+}
+
+/* ── Navbar ────────────────────────────────────── */
+.navbar {
+    border-bottom: 2px solid var(--g64-yellow);
+}
+
+.navbar-brand {
+    color: var(--g64-yellow) !important;
+    letter-spacing: .02em;
+}
+
+/* ── Cards ─────────────────────────────────────── */
+.card {
+    background-color: var(--g64-card);
+    border-color: var(--g64-border) !important;
+}
+
+/* ── Miniature thumbnail card ──────────────────── */
+.mini-card {
+    transition: transform .15s ease, border-color .15s ease;
+    border-color: var(--g64-border) !important;
+    overflow: hidden;
+}
+
+.mini-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--g64-yellow) !important;
+}
+
+.mini-card-img-wrap {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    background: #0d0f14;
+}
+
+.mini-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform .2s ease;
+}
+
+.mini-card:hover .mini-thumb {
+    transform: scale(1.04);
+}
+
+/* ── Text helpers ──────────────────────────────── */
+.mini-manufacturer {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    font-weight: 700;
+}
+
+.mini-name {
+    line-height: 1.2;
+}
+
+/* ── Gallery thumb (detail page) ───────────────── */
+.gallery-thumb {
+    border: 2px solid transparent;
+    transition: border-color .15s;
+}
+
+.gallery-thumb:hover {
+    border-color: var(--g64-yellow);
+}
+
+/* ── Tables ────────────────────────────────────── */
+.table-dark {
+    --bs-table-bg: var(--g64-card);
+    --bs-table-hover-bg: #1f2330;
+}
+
+/* ── Forms ─────────────────────────────────────── */
+.form-control,
+.form-select {
+    color: #d0d3de;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--g64-yellow) !important;
+    box-shadow: 0 0 0 .2rem rgba(240, 165, 0, .2);
+}
+
+/* ── Badges ────────────────────────────────────── */
+.badge {
+    font-weight: 600;
+    letter-spacing: .03em;
+}
+
+/* ── Breadcrumb ────────────────────────────────── */
+.breadcrumb-item + .breadcrumb-item::before {
+    color: #666;
+}
+
+/* ── Footer ────────────────────────────────────── */
+.footer {
+    border-top: 1px solid var(--g64-border);
+}
+
+/* ── Login ─────────────────────────────────────── */
+.login-layout .login-card {
+    border-top: 3px solid var(--g64-yellow) !important;
+}
+
+/* ── Admin layout ──────────────────────────────── */
+.admin-layout .navbar {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
+/* ── Photo admin thumbs ────────────────────────── */
+.photo-thumb-admin {
+    display: inline-block;
+}
+
+/* ── Scrollbar ─────────────────────────────────── */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: var(--g64-dark);
+}
+::-webkit-scrollbar-thumb {
+    background: var(--g64-border);
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--g64-yellow);
+}
+
+/* ── Responsive adjustments ────────────────────── */
+@media (max-width: 576px) {
+    .mini-manufacturer {
+        font-size: .65rem;
+    }
+    .mini-name {
+        font-size: .8rem;
+    }
+}
