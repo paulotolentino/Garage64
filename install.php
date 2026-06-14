@@ -161,11 +161,12 @@ function run_install(
             fn (string $l): bool => !preg_match('/^\s*(CREATE DATABASE|USE\s)/i', $l)
         ));
 
-        // Split on semicolons and execute each non-empty statement
+        // Split on semicolons and execute each non-empty statement.
+        // MySQL handles SQL comments natively, so we only skip truly empty chunks.
         $statements = preg_split('/;\s*(\r?\n|$)/', $filtered, -1, PREG_SPLIT_NO_EMPTY);
         foreach ($statements as $stmt) {
             $stmt = trim($stmt);
-            if ($stmt === '' || str_starts_with($stmt, '--')) {
+            if ($stmt === '') {
                 continue;
             }
             $pdo->exec($stmt);
