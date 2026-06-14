@@ -177,7 +177,7 @@ function run_install(
         $pdo->prepare(
             'INSERT INTO admin_users (username, password_hash)
              VALUES (:u, :h)
-             ON DUPLICATE KEY UPDATE password_hash = :h'
+             ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash)'
         )->execute(['u' => $admin_user, 'h' => $hash]);
 
         // 5. Write config.local.php
