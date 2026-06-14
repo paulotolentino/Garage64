@@ -3,7 +3,8 @@
 // Copy this file to config.local.php and adjust values for your environment.
 // If config.local.php exists it will be loaded automatically.
 
-// Load local overrides first, then fill any missing defaults.
+// Load local overrides first to avoid redefine warnings in strict environments,
+// then fill any missing defaults.
 if (file_exists(__DIR__ . '/config.local.php')) {
     require_once __DIR__ . '/config.local.php';
 }
