@@ -13,13 +13,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['convert_id'])) {
     $stmt->execute([$id]);
     $wish = $stmt->fetch();
     if ($wish) {
+        $manufacturer = trim($wish['manufacturer'] ?? '');
+        if (!$manufacturer) {
+            flash('Preencha o fabricante na wishlist antes de converter para a coleção.', 'warning');
+            redirect('/admin/wishlist.php?edit=' . $id);
+        }
         $ins = db()->prepare(
             'INSERT INTO miniatures (name, manufacturer, scale, status, private_notes)
              VALUES (:name, :manufacturer, :scale, :status, :private_notes)'
         );
         $ins->execute([
             'name'          => $wish['name'],
-            'manufacturer'  => $wish['manufacturer'] ?? '',
+            'manufacturer'  => $manufacturer,
             'scale'         => $wish['scale'],
             'status'        => 'sealed',
             'private_notes' => $wish['notes'],

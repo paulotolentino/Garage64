@@ -6,6 +6,9 @@
  *
  * Creates or resets the admin user in the database.
  * Run this once after importing the schema.
+ *
+ * Note: Requires a Unix-like environment (Linux/macOS).
+ * The stty command is used to hide password input during setup.
  */
 
 require_once __DIR__ . '/includes/config.php';

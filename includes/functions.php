@@ -214,7 +214,7 @@ function upload_photo(array $file, int $miniature_id): ?string {
     };
 
     $dir = UPLOADS_DIR . $miniature_id . '/';
-    if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
+    if (!is_dir($dir) && !mkdir($dir, 0750, true)) {
         return null;
     }
 
