@@ -106,6 +106,6 @@ Configure seu Apache ou Nginx para apontar para o diretório raiz do projeto com
 
 ## Uso
 
-- **Galeria pública:** `http://seusite.com/`
-- **Página da miniatura:** `http://seusite.com/miniature.php?id=1`
-- **Admin:** `http://seusite.com/admin/`
+- **Galeria pública:** `http://garage64.online/`
+- **Página da miniatura:** `http://garage64.online/miniature.php?id=1`
+- **Admin:** `http://garage64.online/admin/`
