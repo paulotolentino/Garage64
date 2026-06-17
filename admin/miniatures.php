@@ -7,6 +7,45 @@ require_login();
 
 $action = $_GET['action'] ?? 'list';
 
+// ─── REORDER PHOTOS (AJAX) ───────────────────────────────────────────────────
+if ($action === 'reorder_photos' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
+    header('Content-Type: application/json');
+    $miniature_id = (int) ($_POST['miniature_id'] ?? 0);
+    $photo_ids    = array_filter(array_map('intval', $_POST['photo_ids'] ?? []));
+    if ($miniature_id && $photo_ids) {
+        $stmt = db()->prepare(
+            'UPDATE miniature_photos SET sort_order = ? WHERE id = ? AND miniature_id = ?'
+        );
+        foreach (array_values($photo_ids) as $i => $pid) {
+            $stmt->execute([$i, $pid, $miniature_id]);
+        }
+    }
+    echo json_encode(['ok' => true]);
+    exit;
+}
+
+// ─── BULK ACTIONS ────────────────────────────────────────────────────────────
+if ($action === 'bulk' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
+    $ids        = array_filter(array_map('intval', $_POST['ids'] ?? []));
+    $bulk_action = $_POST['bulk_action'] ?? '';
+    if ($ids) {
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        match ($bulk_action) {
+            'make_public'   => db()->prepare("UPDATE miniatures SET is_public = 1 WHERE id IN ($placeholders)")->execute($ids),
+            'make_private'  => db()->prepare("UPDATE miniatures SET is_public = 0 WHERE id IN ($placeholders)")->execute($ids),
+            'status_open'   => db()->prepare("UPDATE miniatures SET status = 'open'    WHERE id IN ($placeholders)")->execute($ids),
+            'status_sealed' => db()->prepare("UPDATE miniatures SET status = 'sealed'  WHERE id IN ($placeholders)")->execute($ids),
+            'status_display'=> db()->prepare("UPDATE miniatures SET status = 'display' WHERE id IN ($placeholders)")->execute($ids),
+            'status_storage'=> db()->prepare("UPDATE miniatures SET status = 'storage' WHERE id IN ($placeholders)")->execute($ids),
+            default         => null,
+        };
+        flash(count($ids) . ' miniatura(s) atualizadas.');
+    }
+    redirect('/admin/miniatures.php');
+}
+
 // ─── DELETE ──────────────────────────────────────────────────────────────────
 if ($action === 'delete' && isset($_GET['id'])) {
     $id = (int) $_GET['id'];
@@ -23,7 +62,7 @@ if ($action === 'delete' && isset($_GET['id'])) {
     }
     db()->prepare('DELETE FROM miniatures WHERE id = ?')->execute([$id]);
     flash('Miniatura removida com sucesso.');
-    redirect('/admin/miniatures.php');
+    redirect('/admin/miniatures');
 }
 
 // ─── SAVE (add/edit) ─────────────────────────────────────────────────────────
@@ -42,16 +81,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'public_description'=> trim($_POST['public_description'] ?? '') ?: null,
         'private_story'     => trim($_POST['private_story'] ?? '') ?: null,
         'private_notes'     => trim($_POST['private_notes'] ?? '') ?: null,
-        'purchase_price'    => strlen(trim($_POST['purchase_price'] ?? '')) ? (float) str_replace(',', '.', $_POST['purchase_price']) : null,
-        'estimated_price'   => strlen(trim($_POST['estimated_price'] ?? '')) ? (float) str_replace(',', '.', $_POST['estimated_price']) : null,
+        'purchase_price'    => strlen(trim($_POST['purchase_price'] ?? '')) ? parse_decimal($_POST['purchase_price']) : null,
+        'estimated_price'   => strlen(trim($_POST['estimated_price'] ?? '')) ? parse_decimal($_POST['estimated_price']) : null,
         'purchase_date'     => trim($_POST['purchase_date'] ?? '') ?: null,
         'purchase_location' => trim($_POST['purchase_location'] ?? '') ?: null,
         'emotional_rating'  => (int) ($_POST['emotional_rating'] ?? 0) ?: null,
+        'is_public'         => isset($_POST['is_public']) ? 1 : 0,
     ];
 
     if (!$data['name'] || !$data['manufacturer']) {
         flash('Nome e fabricante são obrigatórios.', 'danger');
-        redirect('/admin/miniatures.php?action=' . ($id ? 'edit&id=' . $id : 'add'));
+        redirect('/admin/miniatures?action=' . ($id ? 'edit&id=' . $id : 'add'));
     }
 
     if ($id) {
@@ -123,18 +163,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         delete_photo((int) $_POST['delete_photo_id'], $miniature_id);
     }
 
-    redirect('/admin/miniatures.php?action=edit&id=' . $miniature_id);
+    redirect('/admin/miniatures?action=edit&id=' . $miniature_id);
 }
 
 // ─── LIST ────────────────────────────────────────────────────────────────────
-$filters = [
-    'search'       => trim($_GET['search'] ?? ''),
-    'manufacturer' => trim($_GET['manufacturer'] ?? ''),
-    'category_id'  => (int) ($_GET['category_id'] ?? 0) ?: null,
-    'status'       => trim($_GET['status'] ?? ''),
-];
+if ($action === 'list') {
+    $filters = [
+        'search'       => trim($_GET['search'] ?? ''),
+        'manufacturer' => trim($_GET['manufacturer'] ?? ''),
+        'category_id'  => (int) ($_GET['category_id'] ?? 0) ?: null,
+        'status'       => trim($_GET['status'] ?? ''),
+        'is_public'    => null, // admin sees all
+    ];
 
-$miniatures    = get_miniatures($filters);
+    $admin_per_page   = PER_PAGE;
+    $admin_page       = max(1, (int) ($_GET['page'] ?? 1));
+    $admin_total      = count_miniatures($filters);
+    $admin_total_pages = (int) ceil($admin_total / $admin_per_page);
+    $admin_page       = min($admin_page, max(1, $admin_total_pages));
+
+    $miniatures = get_miniatures($filters + ['page' => $admin_page, 'per_page' => $admin_per_page]);
+} else {
+    $filters    = [];
+    $miniatures = [];
+    $admin_page = 1;
+    $admin_total = 0;
+    $admin_total_pages = 1;
+}
+
 $categories    = get_categories();
 $tags          = get_tags();
 $manufacturers = get_distinct_manufacturers();
@@ -159,7 +215,8 @@ require_once __DIR__ . '/../includes/header_admin.php';
 <!-- LIST VIEW -->
 <div class="d-flex align-items-center mb-3 gap-2 flex-wrap">
     <h1 class="h4 mb-0 me-auto"><i class="fa fa-car me-2 text-warning"></i>Miniaturas</h1>
-    <a href="/admin/miniatures.php?action=add" class="btn btn-warning btn-sm">
+    <span class="text-secondary small"><?= $admin_total ?> peça<?= $admin_total !== 1 ? 's' : '' ?></span>
+    <a href="/admin/miniatures?action=add" class="btn btn-warning btn-sm">
         <i class="fa fa-plus me-1"></i>Adicionar
     </a>
 </div>
@@ -199,31 +256,60 @@ require_once __DIR__ . '/../includes/header_admin.php';
         </div>
         <div class="col-6 col-md-2 d-flex gap-1">
             <button type="submit" class="btn btn-warning btn-sm flex-grow-1"><i class="fa fa-search"></i></button>
-            <a href="/admin/miniatures.php" class="btn btn-outline-secondary btn-sm"><i class="fa fa-times"></i></a>
+            <a href="/admin/miniatures" class="btn btn-outline-secondary btn-sm"><i class="fa fa-times"></i></a>
         </div>
     </div>
 </form>
 
 <div class="table-responsive">
+<form method="post" action="/admin/miniatures?action=bulk" id="bulkForm">
+    <?= csrf_field() ?>
+    <!-- Bulk toolbar (hidden until selection) -->
+    <div id="bulkBar" class="d-none mb-2 p-2 rounded border border-warning d-flex align-items-center gap-2 flex-wrap"
+         style="background:rgba(255,193,7,.07)">
+        <span id="bulkCount" class="text-warning fw-semibold small"></span>
+        <select name="bulk_action" class="form-select form-select-sm bg-dark text-light border-secondary" style="width:auto;">
+            <option value="">Escolher ação…</option>
+            <optgroup label="Visibilidade">
+                <option value="make_public">Tornar pública</option>
+                <option value="make_private">Tornar privada</option>
+            </optgroup>
+            <optgroup label="Status">
+                <option value="status_open">Aberta</option>
+                <option value="status_sealed">Lacrada</option>
+                <option value="status_display">Em exposição</option>
+                <option value="status_storage">Em armazenamento</option>
+            </optgroup>
+        </select>
+        <button type="submit" class="btn btn-warning btn-sm"
+                onclick="return confirm('Aplicar à seleção?')">Aplicar</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearSelection()">Cancelar</button>
+    </div>
     <table class="table table-dark table-hover table-sm align-middle">
         <thead>
             <tr>
+                <th style="width:36px">
+                    <input type="checkbox" class="form-check-input" id="checkAll" title="Selecionar todos">
+                </th>
                 <th style="width:60px"></th>
                 <th>Nome</th>
                 <th>Fabricante</th>
                 <th>Escala</th>
                 <th>Status</th>
+                <th>Visível</th>
                 <th class="text-end">Ações</th>
             </tr>
         </thead>
         <tbody>
             <?php if (empty($miniatures)): ?>
-                <tr><td colspan="6" class="text-center text-secondary py-4">Nenhuma miniatura cadastrada.</td></tr>
+                <tr><td colspan="8" class="text-center text-secondary py-4">Nenhuma miniatura cadastrada.</td></tr>
             <?php endif; ?>
             <?php foreach ($miniatures as $m): ?>
                 <tr>
+                    <td><input type="checkbox" class="form-check-input row-check" name="ids[]" value="<?= $m['id'] ?>"></td>
                     <td>
-                        <img src="<?= e(photo_url($m['primary_photo'])) ?>"
+                        <img src="<?= e(thumb_url($m['primary_photo'])) ?>"
+                             data-fallback="<?= e(photo_url($m['primary_photo'])) ?>"
                              alt=""
                              style="width:50px;height:40px;object-fit:cover;border-radius:4px;">
                     </td>
@@ -231,14 +317,21 @@ require_once __DIR__ . '/../includes/header_admin.php';
                     <td><?= e($m['manufacturer']) ?></td>
                     <td><?= e($m['scale'] ?? '—') ?></td>
                     <td><?= status_badge($m['status']) ?></td>
+                    <td>
+                        <?php if ($m['is_public']): ?>
+                            <span class="badge bg-success"><i class="fa fa-eye"></i></span>
+                        <?php else: ?>
+                            <span class="badge bg-secondary"><i class="fa fa-eye-slash"></i></span>
+                        <?php endif; ?>
+                    </td>
                     <td class="text-end">
-                        <a href="/admin/miniatures.php?action=edit&id=<?= $m['id'] ?>" class="btn btn-outline-warning btn-sm">
+                        <a href="/admin/miniatures?action=edit&id=<?= $m['id'] ?>" class="btn btn-outline-warning btn-sm">
                             <i class="fa fa-edit"></i>
                         </a>
-                        <a href="/miniature.php?id=<?= $m['id'] ?>" target="_blank" class="btn btn-outline-secondary btn-sm">
+                        <a href="<?= e(mini_url($m)) ?>" target="_blank" class="btn btn-outline-secondary btn-sm">
                             <i class="fa fa-eye"></i>
                         </a>
-                        <a href="/admin/miniatures.php?action=delete&id=<?= $m['id'] ?>"
+                        <a href="/admin/miniatures?action=delete&id=<?= $m['id'] ?>"
                            class="btn btn-outline-danger btn-sm"
                            onclick="return confirm('Remover esta miniatura?')">
                             <i class="fa fa-trash"></i>
@@ -248,12 +341,82 @@ require_once __DIR__ . '/../includes/header_admin.php';
             <?php endforeach; ?>
         </tbody>
     </table>
+</form>
 </div>
+
+<?php if ($admin_total_pages > 1):
+    $qs_parts = ['action' => 'list'];
+    foreach (['search','manufacturer','category_id','status'] as $k) {
+        if (!empty($filters[$k])) $qs_parts[$k] = $filters[$k];
+    }
+    $qs_base = '&' . http_build_query(array_diff_key($qs_parts, ['action' => '']));
+?>
+<nav class="mt-3" aria-label="Paginação">
+    <ul class="pagination pagination-sm justify-content-center flex-wrap">
+        <li class="page-item <?= $admin_page <= 1 ? 'disabled' : '' ?>">
+            <a class="page-link bg-dark border-secondary text-light"
+               href="?action=list&page=<?= $admin_page - 1 . $qs_base ?>">&laquo;</a>
+        </li>
+        <?php for ($p = 1; $p <= $admin_total_pages; $p++): ?>
+            <li class="page-item <?= $p === $admin_page ? 'active' : '' ?>">
+                <a class="page-link <?= $p === $admin_page ? 'bg-warning border-warning text-dark' : 'bg-dark border-secondary text-light' ?>"
+                   href="?action=list&page=<?= $p . $qs_base ?>"><?= $p ?></a>
+            </li>
+        <?php endfor; ?>
+        <li class="page-item <?= $admin_page >= $admin_total_pages ? 'disabled' : '' ?>">
+            <a class="page-link bg-dark border-secondary text-light"
+               href="?action=list&page=<?= $admin_page + 1 . $qs_base ?>">&raquo;</a>
+        </li>
+    </ul>
+</nav>
+<?php endif; ?>
+
+<script>
+(function () {
+    const checkAll = document.getElementById('checkAll');
+    const bar      = document.getElementById('bulkBar');
+    const countEl  = document.getElementById('bulkCount');
+
+    function getChecked() {
+        return [...document.querySelectorAll('.row-check:checked')];
+    }
+    function updateBar() {
+        const checked = getChecked();
+        if (checked.length > 0) {
+            bar.classList.remove('d-none');
+            bar.classList.add('d-flex');
+            countEl.textContent = checked.length + ' selecionada' + (checked.length !== 1 ? 's' : '');
+        } else {
+            bar.classList.add('d-none');
+            bar.classList.remove('d-flex');
+        }
+    }
+    function clearSelection() {
+        document.querySelectorAll('.row-check').forEach(c => c.checked = false);
+        if (checkAll) checkAll.checked = false;
+        updateBar();
+    }
+    window.clearSelection = clearSelection;
+
+    if (checkAll) {
+        checkAll.addEventListener('change', () => {
+            document.querySelectorAll('.row-check').forEach(c => c.checked = checkAll.checked);
+            updateBar();
+        });
+    }
+    document.querySelectorAll('.row-check').forEach(c => {
+        c.addEventListener('change', () => {
+            if (checkAll) checkAll.checked = getChecked().length === document.querySelectorAll('.row-check').length;
+            updateBar();
+        });
+    });
+})();
+</script>
 
 <?php elseif ($action === 'add' || $action === 'edit'): ?>
 <!-- ADD / EDIT FORM -->
 <div class="d-flex align-items-center mb-3 gap-2">
-    <a href="/admin/miniatures.php" class="btn btn-outline-secondary btn-sm"><i class="fa fa-arrow-left"></i></a>
+    <a href="/admin/miniatures" class="btn btn-outline-secondary btn-sm"><i class="fa fa-arrow-left"></i></a>
     <h1 class="h4 mb-0 ms-2">
         <?= $editing ? '<i class="fa fa-edit me-2 text-warning"></i>Editar: ' . e($editing['name']) : '<i class="fa fa-plus me-2 text-warning"></i>Nova Miniatura' ?>
     </h1>
@@ -349,6 +512,15 @@ require_once __DIR__ . '/../includes/header_admin.php';
                                 <?php endforeach; ?>
                             </select>
                         </div>
+                        <div class="col-12">
+                            <div class="form-check form-switch mt-1">
+                                <input class="form-check-input" type="checkbox" name="is_public" id="is_public" value="1"
+                                       <?= (!$editing || $editing['is_public']) ? 'checked' : '' ?>>
+                                <label class="form-check-label text-secondary" for="is_public">
+                                    Visível no site público
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -385,13 +557,14 @@ require_once __DIR__ . '/../includes/header_admin.php';
                 <div class="card-header border-secondary">Fotos</div>
                 <div class="card-body">
                     <?php if (!empty($edit_photos)): ?>
-                        <div class="d-flex flex-wrap gap-2 mb-3">
+                        <p class="text-secondary small mb-2"><i class="fa fa-grip-vertical me-1"></i>Arraste para reordenar.</p>
+                        <div class="d-flex flex-wrap gap-2 mb-3" id="sortable-photos" data-miniature-id="<?= $editing['id'] ?>">
                             <?php foreach ($edit_photos as $ph): ?>
-                                <div class="position-relative photo-thumb-admin">
+                                <div class="position-relative photo-thumb-admin" data-photo-id="<?= $ph['id'] ?>" style="cursor:grab">
                                     <img src="<?= e(photo_url($ph['file_path'])) ?>"
                                          alt=""
                                          class="rounded <?= $ph['is_primary'] ? 'border border-warning border-2' : '' ?>"
-                                         style="width:80px;height:80px;object-fit:cover;">
+                                         style="width:80px;height:80px;object-fit:cover;pointer-events:none;">
                                     <?php if ($ph['is_primary']): ?>
                                         <span class="badge bg-warning text-dark position-absolute bottom-0 start-0" style="font-size:.6rem">Principal</span>
                                     <?php else: ?>
@@ -495,7 +668,7 @@ require_once __DIR__ . '/../includes/header_admin.php';
             <button type="submit" class="btn btn-warning w-100">
                 <i class="fa fa-save me-1"></i><?= $editing ? 'Salvar alterações' : 'Adicionar miniatura' ?>
             </button>
-            <a href="/admin/miniatures.php" class="btn btn-outline-secondary w-100 mt-2">Cancelar</a>
+            <a href="/admin/miniatures" class="btn btn-outline-secondary w-100 mt-2">Cancelar</a>
         </div>
     </div>
 </form>

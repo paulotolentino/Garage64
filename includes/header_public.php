@@ -3,7 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <title><?= e($page_title ?? APP_NAME) ?> — <?= h(APP_NAME) ?></title>
+    <?php if (!empty($og_title)): ?>
+    <meta property="og:site_name" content="<?= h(APP_NAME) ?>">
+    <meta property="og:title"       content="<?= e($og_title) ?> — <?= h(APP_NAME) ?>">
+    <meta property="og:type"        content="website">
+    <meta property="og:url"         content="<?= e($og_url ?? APP_URL) ?>">
+    <?php if (!empty($og_description)): ?>
+    <meta property="og:description" content="<?= e($og_description) ?>">
+    <meta name="description"        content="<?= e($og_description) ?>">
+    <?php endif; ?>
+    <?php if (!empty($og_image)): ?>
+    <meta property="og:image"       content="<?= e($og_image) ?>">
+    <meta property="og:image:width" content="800">
+    <?php endif; ?>
+    <?php endif; ?>
     <link rel="icon" type="image/svg+xml" href="<?= h(APP_URL) ?>/assets/img/favicon-cart.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
@@ -22,9 +38,6 @@
             <ul class="navbar-nav ms-auto">
                 <li class="nav-item">
                     <a class="nav-link" href="/"><i class="fa fa-th me-1"></i>Coleção</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="/admin/login.php"><i class="fa fa-lock me-1"></i>Entrar</a>
                 </li>
             </ul>
         </div>

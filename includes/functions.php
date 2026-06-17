@@ -3,12 +3,65 @@ require_once __DIR__ . '/db.php';
 
 // ─── Sanitization ────────────────────────────────────────────────────────────
 
+/**
+ * Parse a decimal string in either BR format ("1.234,56") or EN format ("1234.56").
+ * If the string contains a comma, dots are treated as thousands separators and
+ * the comma as the decimal separator. Otherwise dot is the decimal separator.
+ */
+function parse_decimal(string $v): float {
+    $v = trim($v);
+    if (str_contains($v, ',')) {
+        // BR format: strip thousands dots, replace decimal comma
+        $v = str_replace(['.', ','], ['', '.'], $v);
+    }
+    return (float) $v;
+}
+
+function slugify(string $text): string {
+    $map = ['á'=>'a','à'=>'a','â'=>'a','ã'=>'a','ä'=>'a','å'=>'a',
+            'é'=>'e','è'=>'e','ê'=>'e','ë'=>'e',
+            'í'=>'i','ì'=>'i','î'=>'i','ï'=>'i',
+            'ó'=>'o','ò'=>'o','ô'=>'o','õ'=>'o','ö'=>'o',
+            'ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u',
+            'ç'=>'c','ñ'=>'n','ý'=>'y'];
+    $text = mb_strtolower($text, 'UTF-8');
+    $text = strtr($text, $map);
+    $text = preg_replace('/[^a-z0-9]+/', '-', $text);
+    return trim($text, '-');
+}
+
+/** Returns the canonical public URL for a miniature, e.g. /mini/34/pandem-datsun-620 */
+function mini_url(array $miniature): string {
+    return '/mini/' . (int)$miniature['id'] . '/' . slugify($miniature['name']);
+}
+
 function h(string $value): string {
     return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
 function e(?string $value): string {
     return h($value ?? '');
+}
+
+/**
+ * Returns an array of page numbers (int) and nulls (ellipsis markers)
+ * for smart pagination. Example: [1, null, 4, 5, 6, null, 12]
+ */
+function pagination_range(int $current, int $total, int $delta = 2): array {
+    if ($total <= 1) return [];
+    $range = [];
+    $left  = max(1, $current - $delta);
+    $right = min($total, $current + $delta);
+    if ($left > 1) {
+        $range[] = 1;
+        if ($left > 2) $range[] = null;
+    }
+    for ($i = $left; $i <= $right; $i++) $range[] = $i;
+    if ($right < $total) {
+        if ($right < $total - 1) $range[] = null;
+        $range[] = $total;
+    }
+    return $range;
 }
 
 // ─── Flash messages ──────────────────────────────────────────────────────────
@@ -37,8 +90,8 @@ function redirect(string $url): never {
 
 // ─── Miniatures ──────────────────────────────────────────────────────────────
 
-function get_miniatures(array $filters = []): array {
-    $where = ['1=1'];
+function _miniatures_where(array $filters, bool $fulltext = true): array {
+    $where  = ['1=1'];
     $params = [];
 
     if (!empty($filters['manufacturer'])) {
@@ -58,28 +111,91 @@ function get_miniatures(array $filters = []): array {
         $params[] = $filters['status'];
     }
     if (!empty($filters['search'])) {
-        $where[] = '(m.name LIKE ? OR m.manufacturer LIKE ? OR m.model LIKE ?)';
-        $s = '%' . $filters['search'] . '%';
-        $params[] = $s;
-        $params[] = $s;
-        $params[] = $s;
+        $term = $filters['search'];
+        if ($fulltext && strlen($term) >= 3) {
+            // FULLTEXT boolean mode: each word becomes +word* (prefix match)
+            $words    = preg_split('/\s+/', trim(preg_replace('/[+\-><()"~*@]+/', ' ', $term)));
+            $ft_query = implode(' ', array_map(fn($w) => '+' . $w . '*', array_filter($words)));
+            $where[]  = 'MATCH(m.name, m.manufacturer, m.model) AGAINST (? IN BOOLEAN MODE)';
+            $params[] = $ft_query;
+        } else {
+            $where[] = '(m.name LIKE ? OR m.manufacturer LIKE ? OR m.model LIKE ?)';
+            $s = '%' . $term . '%';
+            $params[] = $s;
+            $params[] = $s;
+            $params[] = $s;
+        }
     }
     if (!empty($filters['tag_id'])) {
         $where[] = 'EXISTS (SELECT 1 FROM miniature_tags mt WHERE mt.miniature_id = m.id AND mt.tag_id = ?)';
         $params[] = $filters['tag_id'];
     }
+    // By default only show public miniatures; pass is_public=null to skip the filter (admin)
+    if (array_key_exists('is_public', $filters)) {
+        if ($filters['is_public'] !== null) {
+            $where[] = 'm.is_public = ?';
+            $params[] = (int) $filters['is_public'];
+        }
+        // null = no filter (admin sees all)
+    } else {
+        // Default: public only
+        $where[] = 'm.is_public = 1';
+    }
 
-    $sql = 'SELECT m.*, c.name AS category_name,
-                   p.file_path AS primary_photo
-            FROM miniatures m
-            LEFT JOIN categories c ON m.category_id = c.id
-            LEFT JOIN miniature_photos p ON p.miniature_id = m.id AND p.is_primary = 1
-            WHERE ' . implode(' AND ', $where) . '
-            ORDER BY m.created_at DESC';
+    return [$where, $params];
+}
 
-    $stmt = db()->prepare($sql);
-    $stmt->execute($params);
-    return $stmt->fetchAll();
+function count_miniatures(array $filters = []): int {
+    $use_ft = !empty($filters['search']) && strlen($filters['search']) >= 3;
+    foreach ($use_ft ? [true, false] : [false] as $ft) {
+        try {
+            [$where, $params] = _miniatures_where($filters, $ft);
+            $stmt = db()->prepare('SELECT COUNT(*) FROM miniatures m WHERE ' . implode(' AND ', $where));
+            $stmt->execute($params);
+            return (int) $stmt->fetchColumn();
+        } catch (\PDOException $e) {
+            if (!$ft) throw $e; // non-fulltext error — re-throw
+        }
+    }
+    return 0;
+}
+
+function get_miniatures(array $filters = []): array {
+    $use_ft = !empty($filters['search']) && strlen($filters['search']) >= 3;
+    $per_page = max(1, (int) ($filters['per_page'] ?? PER_PAGE));
+    $page     = max(1, (int) ($filters['page']     ?? 1));
+    $offset   = ($page - 1) * $per_page;
+
+    $order = match ($filters['sort'] ?? '') {
+        'name'         => 'm.name ASC',
+        'manufacturer' => 'm.manufacturer ASC, m.name ASC',
+        'year_asc'     => 'm.year ASC, m.name ASC',
+        'year_desc'    => 'm.year DESC, m.name ASC',
+        default        => 'm.created_at DESC',
+    };
+
+    foreach ($use_ft ? [true, false] : [false] as $ft) {
+        try {
+            [$where, $params] = _miniatures_where($filters, $ft);
+            $sql = 'SELECT m.*, c.name AS category_name,
+                           p.file_path AS primary_photo,
+                           (SELECT COUNT(*) FROM miniature_photos WHERE miniature_id = m.id) AS photo_count
+                    FROM miniatures m
+                    LEFT JOIN categories c ON m.category_id = c.id
+                    LEFT JOIN miniature_photos p ON p.miniature_id = m.id AND p.is_primary = 1
+                    WHERE ' . implode(' AND ', $where) . '
+                    ORDER BY ' . $order . '
+                    LIMIT ? OFFSET ?';
+            $params[] = $per_page;
+            $params[] = $offset;
+            $stmt = db()->prepare($sql);
+            $stmt->execute($params);
+            return $stmt->fetchAll();
+        } catch (\PDOException $e) {
+            if (!$ft) throw $e;
+        }
+    }
+    return [];
 }
 
 function get_miniature(int $id): ?array {
@@ -174,7 +290,36 @@ function get_stats(): array {
         "SELECT status, COUNT(*) AS total FROM miniatures GROUP BY status"
     )->fetchAll();
 
-    return compact('total', 'by_scale', 'by_manufacturer', 'by_category', 'by_status');
+    $financial = db()->query(
+        "SELECT
+            SUM(purchase_price)                                          AS total_paid,
+            SUM(estimated_price)                                         AS total_estimated,
+            COUNT(purchase_price)                                        AS count_paid,
+            COUNT(estimated_price)                                       AS count_estimated,
+            SUM(CASE WHEN purchase_price IS NOT NULL
+                      AND estimated_price IS NOT NULL
+                     THEN purchase_price END)                            AS both_paid,
+            SUM(CASE WHEN purchase_price IS NOT NULL
+                      AND estimated_price IS NOT NULL
+                     THEN estimated_price END)                           AS both_estimated,
+            COUNT(CASE WHEN purchase_price IS NOT NULL
+                        AND estimated_price IS NOT NULL
+                       THEN 1 END)                                       AS count_both
+         FROM miniatures"
+    )->fetch();
+
+    return compact('total', 'by_scale', 'by_manufacturer', 'by_category', 'by_status', 'financial');
+}
+
+function get_adjacent_miniatures(int $id): array {
+    $db   = db();
+    $stmt = $db->prepare('SELECT id, name, manufacturer FROM miniatures WHERE is_public = 1 AND id < ? ORDER BY id DESC LIMIT 1');
+    $stmt->execute([$id]);
+    $prev = $stmt->fetch() ?: null;
+    $stmt = $db->prepare('SELECT id, name, manufacturer FROM miniatures WHERE is_public = 1 AND id > ? ORDER BY id ASC LIMIT 1');
+    $stmt->execute([$id]);
+    $next = $stmt->fetch() ?: null;
+    return compact('prev', 'next');
 }
 
 // ─── Wishlist ────────────────────────────────────────────────────────────────
@@ -205,27 +350,60 @@ function upload_photo(array $file, int $miniature_id): ?string {
         return null;
     }
 
-    $ext = match ($mime) {
-        'image/jpeg' => 'jpg',
-        'image/png'  => 'png',
-        'image/webp' => 'webp',
-        'image/gif'  => 'gif',
-        default      => 'jpg',
-    };
-
     $dir = UPLOADS_DIR . $miniature_id . '/';
     if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
         return null;
     }
 
-    $filename = bin2hex(random_bytes(12)) . '.' . $ext;
+    $filename = bin2hex(random_bytes(12)) . '.webp';
     $dest = $dir . $filename;
 
-    if (!move_uploaded_file($file['tmp_name'], $dest)) {
+    // Load source image into GD
+    $image = match ($mime) {
+        'image/jpeg' => imagecreatefromjpeg($file['tmp_name']),
+        'image/png'  => imagecreatefrompng($file['tmp_name']),
+        'image/gif'  => imagecreatefromgif($file['tmp_name']),
+        'image/webp' => imagecreatefromwebp($file['tmp_name']),
+        default      => null,
+    };
+
+    if (!$image) {
         return null;
     }
 
+    // Preserve alpha channel for PNG/GIF sources
+    if (in_array($mime, ['image/png', 'image/gif'], true)) {
+        imagepalettetotruecolor($image);
+        imagealphablending($image, true);
+        imagesavealpha($image, true);
+    }
+
+    $ok = imagewebp($image, $dest, WEBP_QUALITY);
+
+    if (!$ok) {
+        imagedestroy($image);
+        return null;
+    }
     @chmod($dest, 0644);
+
+    // Generate thumbnail
+    $orig_w = imagesx($image);
+    $orig_h = imagesy($image);
+    if ($orig_w > THUMB_WIDTH) {
+        $thumb_h = (int) round($orig_h * THUMB_WIDTH / $orig_w);
+        $thumb   = imagecreatetruecolor(THUMB_WIDTH, $thumb_h);
+        imagecopyresampled($thumb, $image, 0, 0, 0, 0, THUMB_WIDTH, $thumb_h, $orig_w, $orig_h);
+        $thumb_dest = $dir . substr($filename, 0, -5) . '_thumb.webp';
+        imagewebp($thumb, $thumb_dest, WEBP_QUALITY);
+        @chmod($thumb_dest, 0644);
+        imagedestroy($thumb);
+    } else {
+        // Original already fits; symlink would waste space — just copy
+        copy($dest, $dir . substr($filename, 0, -5) . '_thumb.webp');
+        @chmod($dir . substr($filename, 0, -5) . '_thumb.webp', 0644);
+    }
+
+    imagedestroy($image);
 
     return $miniature_id . '/' . $filename;
 }
@@ -241,6 +419,11 @@ function delete_photo(int $photo_id, int $miniature_id): void {
     $path = UPLOADS_DIR . $photo['file_path'];
     if (file_exists($path)) {
         unlink($path);
+    }
+    // Also remove thumbnail if it exists
+    $thumb_path = UPLOADS_DIR . thumb_path($photo['file_path']);
+    if ($thumb_path !== $path && file_exists($thumb_path)) {
+        unlink($thumb_path);
     }
 
     db()->prepare('DELETE FROM miniature_photos WHERE id = ?')->execute([$photo_id]);
@@ -297,10 +480,27 @@ function photo_url(?string $file_path): string {
     if (!preg_match('#^\d+/[a-f0-9]+\.(jpg|jpeg|png|webp|gif)$#i', $file_path)) {
         return '/assets/img/no-photo.svg';
     }
-    if (!is_file(UPLOADS_DIR . $file_path)) {
+    return '/uploads/' . $file_path;
+}
+
+// Returns the thumb file_path derived by convention (no DB lookup).
+function thumb_path(?string $file_path): string {
+    if (!$file_path || !preg_match('#^\d+/([a-f0-9]+)\.webp$#i', $file_path)) {
+        return $file_path ?? '';
+    }
+    return preg_replace('#\.webp$#i', '_thumb.webp', $file_path);
+}
+
+// URL for the thumbnail; falls back gracefully to full image via data-fallback in JS.
+function thumb_url(?string $file_path): string {
+    if (!$file_path) {
         return '/assets/img/no-photo.svg';
     }
-    return '/uploads/' . $file_path;
+    if (!preg_match('#^\d+/[a-f0-9]+\.webp$#i', $file_path)) {
+        // Non-webp or unrecognised — just use original
+        return photo_url($file_path);
+    }
+    return '/uploads/' . thumb_path($file_path);
 }
 
 // ─── Recent miniatures ───────────────────────────────────────────────────────

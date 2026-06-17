@@ -2,6 +2,16 @@
 
 document.addEventListener('DOMContentLoaded', function () {
 
+    // ── Broken image fallback (replaces is_file() server-side check) ─────────
+    document.addEventListener('error', function (e) {
+        if (e.target.tagName === 'IMG' && !e.target.dataset.fallbackApplied) {
+            e.target.dataset.fallbackApplied = '1';
+            // Thumbnail imgs carry data-fallback pointing to the full image.
+            // Other broken imgs fall back to the placeholder.
+            e.target.src = e.target.dataset.fallback || '/assets/img/no-photo.svg';
+        }
+    }, true);
+
     // ── Auto-dismiss flash alerts after 5 s ──────────
     document.querySelectorAll('.alert-dismissible').forEach(function (el) {
         setTimeout(function () {

@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = trim($_POST['name'] ?? '');
     if (!$name) {
         flash('Nome é obrigatório.', 'danger');
-        redirect('/admin/categories.php');
+        redirect('/admin/categories');
     }
     if ($id) {
         db()->prepare('UPDATE categories SET name = ? WHERE id = ?')->execute([$name, $id]);
@@ -21,14 +21,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         db()->prepare('INSERT INTO categories (name) VALUES (?)')->execute([$name]);
         flash('Categoria criada.');
     }
-    redirect('/admin/categories.php');
+    redirect('/admin/categories');
 }
 
 // Delete
 if (isset($_GET['delete'])) {
     db()->prepare('DELETE FROM categories WHERE id = ?')->execute([(int) $_GET['delete']]);
     flash('Categoria removida.');
-    redirect('/admin/categories.php');
+    redirect('/admin/categories');
 }
 
 $editing    = null;
@@ -58,8 +58,8 @@ require_once __DIR__ . '/../includes/header_admin.php';
                         <tr>
                             <td><?= e($cat['name']) ?></td>
                             <td class="text-end">
-                                <a href="/admin/categories.php?edit=<?= $cat['id'] ?>" class="btn btn-outline-warning btn-sm"><i class="fa fa-edit"></i></a>
-                                <a href="/admin/categories.php?delete=<?= $cat['id'] ?>" class="btn btn-outline-danger btn-sm"
+                                <a href="/admin/categories?edit=<?= $cat['id'] ?>" class="btn btn-outline-warning btn-sm"><i class="fa fa-edit"></i></a>
+                                <a href="/admin/categories?delete=<?= $cat['id'] ?>" class="btn btn-outline-danger btn-sm"
                                    onclick="return confirm('Remover categoria?')"><i class="fa fa-trash"></i></a>
                             </td>
                         </tr>
@@ -83,7 +83,7 @@ require_once __DIR__ . '/../includes/header_admin.php';
                     </div>
                     <button type="submit" class="btn btn-warning"><?= $editing ? 'Salvar' : 'Criar' ?></button>
                     <?php if ($editing): ?>
-                        <a href="/admin/categories.php" class="btn btn-outline-secondary ms-2">Cancelar</a>
+                        <a href="/admin/categories" class="btn btn-outline-secondary ms-2">Cancelar</a>
                     <?php endif; ?>
                 </form>
             </div>

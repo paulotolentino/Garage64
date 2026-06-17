@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = trim($_POST['name'] ?? '');
     if (!$name) {
         flash('Nome é obrigatório.', 'danger');
-        redirect('/admin/tags.php');
+        redirect('/admin/tags');
     }
     if ($id) {
         db()->prepare('UPDATE tags SET name = ? WHERE id = ?')->execute([$name, $id]);
@@ -51,8 +51,8 @@ require_once __DIR__ . '/../includes/header_admin.php';
             <?php foreach ($tags as $tag): ?>
                 <div class="d-flex align-items-center badge bg-secondary gap-1 p-2">
                     <span><?= e($tag['name']) ?></span>
-                    <a href="/admin/tags.php?edit=<?= $tag['id'] ?>" class="text-warning ms-1"><i class="fa fa-edit fa-xs"></i></a>
-                    <a href="/admin/tags.php?delete=<?= $tag['id'] ?>" class="text-danger ms-1"
+                    <a href="/admin/tags?edit=<?= $tag['id'] ?>" class="text-warning ms-1"><i class="fa fa-edit fa-xs"></i></a>
+                    <a href="/admin/tags?delete=<?= $tag['id'] ?>" class="text-danger ms-1"
                        onclick="return confirm('Remover tag?')"><i class="fa fa-times fa-xs"></i></a>
                 </div>
             <?php endforeach; ?>
@@ -76,7 +76,7 @@ require_once __DIR__ . '/../includes/header_admin.php';
                     </div>
                     <button type="submit" class="btn btn-warning"><?= $editing ? 'Salvar' : 'Criar' ?></button>
                     <?php if ($editing): ?>
-                        <a href="/admin/tags.php" class="btn btn-outline-secondary ms-2">Cancelar</a>
+                        <a href="/admin/tags" class="btn btn-outline-secondary ms-2">Cancelar</a>
                     <?php endif; ?>
                 </form>
             </div>

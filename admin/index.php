@@ -35,6 +35,86 @@ require_once __DIR__ . '/../includes/header_admin.php';
     <?php endforeach; ?>
 </div>
 
+<!-- Financial stats -->
+<?php
+$fin           = $stats['financial'];
+$total_paid    = $fin['total_paid']    !== null ? (float) $fin['total_paid']    : null;
+$total_est     = $fin['total_estimated'] !== null ? (float) $fin['total_estimated'] : null;
+// Appreciation uses only miniatures that have BOTH prices filled
+$both_paid     = $fin['both_paid']      !== null ? (float) $fin['both_paid']      : null;
+$both_est      = $fin['both_estimated'] !== null ? (float) $fin['both_estimated'] : null;
+$count_both    = (int) $fin['count_both'];
+$appreciation  = ($both_paid && $both_est) ? $both_est - $both_paid : null;
+$app_pct       = ($both_paid && $appreciation !== null) ? ($appreciation / $both_paid) * 100 : null;
+?>
+<div class="d-flex align-items-center mb-2 gap-2">
+    <span class="text-secondary small">Valores financeiros</span>
+    <button id="toggleFinancial" class="btn btn-sm btn-link text-secondary p-0" title="Mostrar/ocultar valores"
+            style="font-size:1rem; line-height:1;">
+        <i class="fa fa-eye" id="toggleFinancialIcon"></i>
+    </button>
+</div>
+<div class="row g-3 mb-4" id="financialCards">
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="card bg-dark border-secondary h-100">
+            <div class="card-body">
+                <div class="text-secondary small mb-1"><i class="fa fa-receipt me-1"></i>Valor total pago</div>
+                <div class="h4 mb-0 text-light fin-value">
+                    <?= $total_paid !== null
+                        ? 'R$ ' . number_format($total_paid, 2, ',', '.')
+                        : '<span class="text-secondary">—</span>' ?>
+                </div>
+                <div class="text-secondary fin-value" style="font-size:.75rem"><?= (int) $fin['count_paid'] ?> pç<?= (int)$fin['count_paid'] !== 1 ? 's' : '' ?> com preço</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="card bg-dark border-secondary h-100">
+            <div class="card-body">
+                <div class="text-secondary small mb-1"><i class="fa fa-chart-line me-1"></i>Valor estimado total</div>
+                <div class="h4 mb-0 text-light fin-value">
+                    <?= $total_est !== null
+                        ? 'R$ ' . number_format($total_est, 2, ',', '.')
+                        : '<span class="text-secondary">—</span>' ?>
+                </div>
+                <div class="text-secondary fin-value" style="font-size:.75rem"><?= (int) $fin['count_estimated'] ?> pç<?= (int)$fin['count_estimated'] !== 1 ? 's' : '' ?> com estimativa</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="card bg-dark border-secondary h-100">
+            <div class="card-body">
+                <div class="text-secondary small mb-1"><i class="fa fa-arrow-trend-up me-1"></i>Valorização</div>
+                <?php if ($appreciation !== null): ?>
+                    <div class="h4 mb-0 fin-value <?= $appreciation >= 0 ? 'text-success' : 'text-danger' ?>">
+                        <?= ($appreciation >= 0 ? '+' : '-') . 'R$ ' . number_format(abs($appreciation), 2, ',', '.') ?>
+                    </div>
+                    <div class="text-secondary fin-value" style="font-size:.75rem">
+                        <?= ($app_pct >= 0 ? '+' : '') . number_format($app_pct, 1) ?>% sobre o pago
+                        · <?= $count_both ?> pç<?= $count_both !== 1 ? 's' : '' ?> com ambos os preços
+                    </div>
+                <?php else: ?>
+                    <div class="h4 mb-0 text-secondary fin-value">—</div>
+                    <div class="text-secondary fin-value" style="font-size:.75rem">preencha preço pago e estimado</div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="card bg-dark border-secondary h-100">
+            <div class="card-body">
+                <div class="text-secondary small mb-1"><i class="fa fa-eye-slash me-1"></i>Visibilidade pública</div>
+                <?php
+                $pub_count = db()->query('SELECT COUNT(*) FROM miniatures WHERE is_public = 1')->fetchColumn();
+                $prv_count = $stats['total'] - $pub_count;
+                ?>
+                <div class="h4 mb-0 text-light"><?= $pub_count ?> <small class="text-secondary fs-6">públicas</small></div>
+                <div class="text-secondary" style="font-size:.75rem"><?= $prv_count ?> oculta<?= $prv_count !== 1 ? 's' : '' ?> do público</div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row g-4">
     <!-- By Manufacturer -->
     <div class="col-12 col-lg-4">
@@ -105,13 +185,35 @@ require_once __DIR__ . '/../includes/header_admin.php';
 
 <div class="row mt-4">
     <div class="col">
-        <a href="/admin/miniatures.php?action=add" class="btn btn-warning">
+        <a href="/admin/miniatures?action=add" class="btn btn-warning">
             <i class="fa fa-plus me-1"></i>Adicionar Miniatura
         </a>
-        <a href="/admin/wishlist.php" class="btn btn-outline-secondary ms-2">
+        <a href="/admin/wishlist" class="btn btn-outline-secondary ms-2">
             <i class="fa fa-heart me-1"></i>Wishlist
         </a>
     </div>
 </div>
 
 <?php require_once __DIR__ . '/../includes/footer_admin.php'; ?>
+<script>
+(function () {
+    const KEY  = 'g64_fin_hidden';
+    const btn  = document.getElementById('toggleFinancial');
+    const icon = document.getElementById('toggleFinancialIcon');
+    const vals = document.querySelectorAll('.fin-value');
+    const BLUR = 'blur(6px)';
+
+    function setHidden(hidden) {
+        vals.forEach(el => el.style.filter = hidden ? BLUR : '');
+        icon.className = hidden ? 'fa fa-eye-slash' : 'fa fa-eye';
+        localStorage.setItem(KEY, hidden ? '1' : '0');
+    }
+
+    // Restore from localStorage
+    setHidden(localStorage.getItem(KEY) === '1');
+
+    btn.addEventListener('click', () => {
+        setHidden(localStorage.getItem(KEY) !== '1');
+    });
+})();
+</script>

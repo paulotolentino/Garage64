@@ -21,16 +21,28 @@ DirectoryIndex index.php
 # Block the web installer once installed.lock exists.
 # Uses REQUEST_FILENAME to derive the app directory, so it works in subdirectories too.
 <IfModule mod_rewrite.c>
+    RewriteEngine On
+
     RewriteCond %{REQUEST_FILENAME} ^(.+/)install\.php$
     RewriteCond %1installed.lock -f
     RewriteRule ^install\.php$ - [F,L]
-</IfModule>
 
-# Protect includes directory
-<IfModule mod_rewrite.c>
-    RewriteEngine On
+    # Block sensitive directories
     RewriteRule ^includes/ - [F,L]
     RewriteRule ^database/ - [F,L]
+
+    # Serve robots.txt and sitemap.xml via PHP
+    RewriteRule ^robots\.txt$ robots.php [L]
+    RewriteRule ^sitemap\.xml$ sitemap.php [L]
+
+    # Miniature detail: /mini/{id} or /mini/{id}/{slug}
+    RewriteRule ^mini/(\d+)(/[^/]*)?/?$ miniature.php?id=$1 [L,QSA]
+
+    # Clean URLs: strip .php from any page that has a matching .php file
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME}\.php -f
+    RewriteRule ^(.+?)/?$ $1.php [L]
 </IfModule>
 
 # Cache static assets

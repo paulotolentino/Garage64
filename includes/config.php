@@ -51,3 +51,12 @@ if (!defined('ALLOWED_IMAGE_TYPES')) {
 if (!defined('MAX_UPLOAD_SIZE')) {
     define('MAX_UPLOAD_SIZE', 5 * 1024 * 1024); // 5 MB
 }
+if (!defined('WEBP_QUALITY')) {
+    define('WEBP_QUALITY', 85); // 0–100; 85 is a good balance of size vs. quality
+}
+if (!defined('THUMB_WIDTH')) {
+    define('THUMB_WIDTH', 400); // max width in px for generated thumbnails
+}
+if (!defined('PER_PAGE')) {
+    define('PER_PAGE', 10); // items per page in the public listing
+}

@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['convert_id'])) {
         $manufacturer = trim($wish['manufacturer'] ?? '');
         if (!$manufacturer) {
             flash('Preencha o fabricante na wishlist antes de converter para a coleção.', 'warning');
-            redirect('/admin/wishlist.php?edit=' . $id);
+            redirect('/admin/wishlist?edit=' . $id);
         }
         $ins = db()->prepare(
             'INSERT INTO miniatures (name, manufacturer, scale, status, private_notes)
@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['convert_id'])) {
         $mini_id = (int) db()->lastInsertId();
         db()->prepare("UPDATE wishlist SET status = 'purchased' WHERE id = ?")->execute([$id]);
         flash('Peça convertida para a coleção! Edite os detalhes agora.');
-        redirect('/admin/miniatures.php?action=edit&id=' . $mini_id);
+        redirect('/admin/miniatures?action=edit&id=' . $mini_id);
     }
 }
 
@@ -53,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!$data['name']) {
         flash('Nome é obrigatório.', 'danger');
-        redirect('/admin/wishlist.php');
+        redirect('/admin/wishlist');
     }
 
     if ($id) {
@@ -99,10 +99,10 @@ require_once __DIR__ . '/../includes/header_admin.php';
         <div class="d-flex align-items-center mb-3 gap-2 flex-wrap">
             <h1 class="h4 mb-0 me-auto"><i class="fa fa-heart me-2 text-warning"></i>Wishlist</h1>
             <div class="btn-group btn-group-sm">
-                <a href="/admin/wishlist.php" class="btn <?= !$filter_status ? 'btn-warning' : 'btn-outline-secondary' ?>">Todas</a>
-                <a href="/admin/wishlist.php?status=wanted" class="btn <?= $filter_status === 'wanted' ? 'btn-warning' : 'btn-outline-secondary' ?>">Desejadas</a>
-                <a href="/admin/wishlist.php?status=purchased" class="btn <?= $filter_status === 'purchased' ? 'btn-warning' : 'btn-outline-secondary' ?>">Compradas</a>
-                <a href="/admin/wishlist.php?status=cancelled" class="btn <?= $filter_status === 'cancelled' ? 'btn-warning' : 'btn-outline-secondary' ?>">Canceladas</a>
+                <a href="/admin/wishlist" class="btn <?= !$filter_status ? 'btn-warning' : 'btn-outline-secondary' ?>">Todas</a>
+                <a href="/admin/wishlist?status=wanted" class="btn <?= $filter_status === 'wanted' ? 'btn-warning' : 'btn-outline-secondary' ?>">Desejadas</a>
+                <a href="/admin/wishlist?status=purchased" class="btn <?= $filter_status === 'purchased' ? 'btn-warning' : 'btn-outline-secondary' ?>">Compradas</a>
+                <a href="/admin/wishlist?status=cancelled" class="btn <?= $filter_status === 'cancelled' ? 'btn-warning' : 'btn-outline-secondary' ?>">Canceladas</a>
             </div>
         </div>
 
@@ -148,8 +148,8 @@ require_once __DIR__ . '/../includes/header_admin.php';
                                         </button>
                                     </form>
                                 <?php endif; ?>
-                                <a href="/admin/wishlist.php?edit=<?= $w['id'] ?>" class="btn btn-outline-warning btn-sm"><i class="fa fa-edit"></i></a>
-                                <a href="/admin/wishlist.php?delete=<?= $w['id'] ?>" class="btn btn-outline-danger btn-sm"
+                                <a href="/admin/wishlist?edit=<?= $w['id'] ?>" class="btn btn-outline-warning btn-sm"><i class="fa fa-edit"></i></a>
+                                <a href="/admin/wishlist?delete=<?= $w['id'] ?>" class="btn btn-outline-danger btn-sm"
                                    onclick="return confirm('Remover item?')"><i class="fa fa-trash"></i></a>
                             </td>
                         </tr>
@@ -211,7 +211,7 @@ require_once __DIR__ . '/../includes/header_admin.php';
                         <i class="fa fa-save me-1"></i><?= $editing ? 'Salvar' : 'Adicionar' ?>
                     </button>
                     <?php if ($editing): ?>
-                        <a href="/admin/wishlist.php" class="btn btn-outline-secondary w-100 mt-2">Cancelar</a>
+                        <a href="/admin/wishlist" class="btn btn-outline-secondary w-100 mt-2">Cancelar</a>
                     <?php endif; ?>
                 </form>
             </div>
