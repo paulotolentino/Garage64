@@ -434,6 +434,23 @@ body.admin-layout {
 }
 
 /* ── Print styles ───────────────────────────────── */
+/* ── Public star rating picker ──────────────────────────────── */
+.star-picker .star-rate-btn {
+  opacity: 0.35;
+  transition:
+    opacity 0.15s,
+    transform 0.15s;
+}
+.star-picker:hover .star-rate-btn {
+  opacity: 1;
+}
+.star-picker .star-rate-btn:hover ~ .star-rate-btn {
+  opacity: 0.35;
+}
+.star-picker .star-rate-btn:hover {
+  transform: scale(1.2);
+}
+
 @media print {
   .navbar,
   .footer,

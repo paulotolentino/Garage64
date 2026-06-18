@@ -198,6 +198,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     redirect('/admin/miniatures?action=edit&id=' . $miniature_id);
 }
 
+// ─── VIEW (detail) ───────────────────────────────────────────────────────────
+if ($action === 'view') {
+    $view_id      = (int) ($_GET['id'] ?? 0);
+    $view_mini    = $view_id ? get_miniature($view_id) : null;
+    $view_photos  = $view_id ? get_miniature_photos($view_id) : [];
+    $view_tags    = $view_id ? get_miniature_tags($view_id) : [];
+    if (!$view_mini) { flash('Miniatura não encontrada.', 'danger'); redirect('/admin/miniatures'); }
+}
+
 // ─── LIST ────────────────────────────────────────────────────────────────────
 if ($action === 'list') {
     $filters = [
@@ -357,6 +366,9 @@ require_once __DIR__ . '/../includes/header_admin.php';
                         <?php endif; ?>
                     </td>
                     <td class="text-end">
+                        <a href="/admin/miniatures?action=view&id=<?= $m['id'] ?>" class="btn btn-outline-info btn-sm" title="Ver detalhes">
+                            <i class="fa fa-circle-info"></i>
+                        </a>
                         <a href="/admin/miniatures?action=edit&id=<?= $m['id'] ?>" class="btn btn-outline-warning btn-sm">
                             <i class="fa fa-edit"></i>
                         </a>
@@ -448,6 +460,191 @@ require_once __DIR__ . '/../includes/header_admin.php';
     });
 })();
 </script>
+
+<?php elseif ($action === 'view'): ?>
+<!-- VIEW DETAIL -->
+<?php
+    $m  = $view_mini;
+    $status_labels = ['open'=>'Aberta','sealed'=>'Lacrada','display'=>'Em exposição','storage'=>'Em armazenamento'];
+    $primary_photo = null;
+    foreach ($view_photos as $vp) { if ($vp['is_primary']) { $primary_photo = $vp; break; } }
+    if (!$primary_photo && !empty($view_photos)) $primary_photo = $view_photos[0];
+    $appreciation = null;
+    if ($m['purchase_price'] > 0 && $m['estimated_price'] > 0) {
+        $appreciation = (($m['estimated_price'] - $m['purchase_price']) / $m['purchase_price']) * 100;
+    }
+    $pub_rating = get_public_rating($view_id);
+?>
+<div class="d-flex align-items-center mb-4 gap-2 flex-wrap">
+    <a href="/admin/miniatures" class="btn btn-outline-secondary btn-sm"><i class="fa fa-arrow-left"></i></a>
+    <h1 class="h4 mb-0 ms-2 me-auto"><i class="fa fa-circle-info me-2 text-info"></i><?= e($m['name']) ?></h1>
+    <a href="/admin/miniatures?action=edit&id=<?= $m['id'] ?>" class="btn btn-warning btn-sm">
+        <i class="fa fa-edit me-1"></i>Editar
+    </a>
+    <?php if ($m['is_public']): ?>
+    <a href="<?= e(mini_url($m)) ?>" target="_blank" class="btn btn-outline-secondary btn-sm">
+        <i class="fa fa-external-link me-1"></i>Ver no site
+    </a>
+    <?php endif; ?>
+</div>
+
+<div class="row g-4">
+    <!-- Fotos -->
+    <div class="col-12 col-lg-5">
+        <div class="card bg-dark border-secondary h-100">
+            <div class="card-body">
+                <?php if ($primary_photo): ?>
+                    <img src="<?= e(photo_url($primary_photo['file_path'])) ?>"
+                         alt="<?= e($m['name']) ?>"
+                         class="img-fluid rounded mb-3"
+                         style="width:100%;max-height:320px;object-fit:contain;background:#000;">
+                <?php else: ?>
+                    <div class="d-flex align-items-center justify-content-center rounded mb-3 text-secondary"
+                         style="height:200px;background:#111;">
+                        <i class="fa fa-image fa-3x opacity-25"></i>
+                    </div>
+                <?php endif; ?>
+                <?php if (count($view_photos) > 1): ?>
+                    <div class="d-flex flex-wrap gap-2">
+                        <?php foreach ($view_photos as $vp): ?>
+                            <img src="<?= e(thumb_url($vp['file_path'])) ?>"
+                                 alt=""
+                                 class="rounded <?= $vp['is_primary'] ? 'border border-warning border-2' : 'border border-secondary' ?>"
+                                 style="width:60px;height:60px;object-fit:cover;">
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detalhes -->
+    <div class="col-12 col-lg-7">
+        <div class="row g-3">
+            <!-- Identidade -->
+            <div class="col-12">
+                <div class="card bg-dark border-secondary">
+                    <div class="card-header border-secondary text-warning small fw-semibold">
+                        <i class="fa fa-tag me-1"></i>Identificação
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-2 small">
+                            <div class="col-6"><span class="text-secondary">Fabricante</span><br><span class="text-light"><?= e($m['manufacturer']) ?></span></div>
+                            <div class="col-6"><span class="text-secondary">Modelo</span><br><span class="text-light"><?= e($m['model'] ?? '—') ?></span></div>
+                            <div class="col-4"><span class="text-secondary">Escala</span><br><span class="text-light"><?= e($m['scale'] ?? '—') ?></span></div>
+                            <div class="col-4"><span class="text-secondary">Ano</span><br><span class="text-light"><?= $m['year'] ?? '—' ?></span></div>
+                            <div class="col-4"><span class="text-secondary">Categoria</span><br><span class="text-light"><?= e($m['category_name'] ?? '—') ?></span></div>
+                            <div class="col-4"><span class="text-secondary">Status</span><br><?= status_badge($m['status']) ?></div>
+                            <div class="col-4">
+                                <span class="text-secondary">Visibilidade</span><br>
+                                <?php if ($m['is_public']): ?>
+                                    <span class="badge bg-success"><i class="fa fa-eye me-1"></i>Pública</span>
+                                <?php else: ?>
+                                    <span class="badge bg-secondary"><i class="fa fa-eye-slash me-1"></i>Privada</span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="col-4">
+                                <span class="text-secondary">Visualizações</span><br>
+                                <span class="text-info fw-bold"><i class="fa fa-eye me-1"></i><?= (int)($m['views'] ?? 0) ?></span>
+                            </div>
+                            <div class="col-4">
+                                <span class="text-secondary">Avaliação pública</span><br>
+                                <?php if ($pub_rating['count'] > 0): ?>
+                                    <?php for ($s=1;$s<=5;$s++): ?>
+                                        <i class="fa fa-star fa-sm <?= $pub_rating['avg'] >= $s ? 'text-warning' : 'text-secondary opacity-25' ?>"></i>
+                                    <?php endfor; ?>
+                                    <span class="text-secondary small ms-1"><?= number_format($pub_rating['avg'],1,',','') ?> (<?= $pub_rating['count'] ?>)</span>
+                                <?php else: ?>
+                                    <span class="text-secondary small">Sem avaliações</span>
+                                <?php endif; ?>
+                            </div>
+                            <?php if (!empty($view_tags)): ?>
+                            <div class="col-12">
+                                <span class="text-secondary">Tags</span><br>
+                                <?php foreach ($view_tags as $t): ?>
+                                    <span class="badge bg-secondary me-1"><?= e($t['name']) ?></span>
+                                <?php endforeach; ?>
+                            </div>
+                            <?php endif; ?>
+                            <?php if ($m['emotional_rating']): ?>
+                            <div class="col-12">
+                                <span class="text-secondary">Avaliação</span><br>
+                                <?= emotional_rating_badge((int)$m['emotional_rating']) ?>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Financeiro -->
+            <div class="col-12">
+                <div class="card bg-dark border-secondary">
+                    <div class="card-header border-secondary text-warning small fw-semibold">
+                        <i class="fa fa-lock me-1"></i>Financeiro
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-2 small">
+                            <div class="col-6"><span class="text-secondary">Valor pago</span><br>
+                                <span class="text-light"><?= $m['purchase_price'] !== null ? 'R$ ' . number_format($m['purchase_price'],2,',','.') : '—' ?></span>
+                            </div>
+                            <div class="col-6"><span class="text-secondary">Valor estimado</span><br>
+                                <span class="text-light"><?= $m['estimated_price'] !== null ? 'R$ ' . number_format($m['estimated_price'],2,',','.') : '—' ?></span>
+                            </div>
+                            <?php if ($appreciation !== null): ?>
+                            <div class="col-6"><span class="text-secondary">Valorização</span><br>
+                                <span class="fw-bold <?= $appreciation >= 0 ? 'text-success' : 'text-danger' ?>">
+                                    <?= $appreciation >= 0 ? '+' : '' ?><?= number_format($appreciation, 1) ?>%
+                                </span>
+                            </div>
+                            <?php endif; ?>
+                            <div class="col-6"><span class="text-secondary">Data da compra</span><br>
+                                <span class="text-light"><?= $m['purchase_date'] ? date('d/m/Y', strtotime($m['purchase_date'])) : '—' ?></span>
+                            </div>
+                            <?php if ($m['purchase_location']): ?>
+                            <div class="col-12"><span class="text-secondary">Local da compra</span><br>
+                                <span class="text-light"><?= e($m['purchase_location']) ?></span>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Descrições -->
+    <?php if ($m['public_description'] || $m['private_story'] || $m['private_notes']): ?>
+    <div class="col-12">
+        <div class="row g-3">
+            <?php if ($m['public_description']): ?>
+            <div class="col-12 col-md-4">
+                <div class="card bg-dark border-secondary h-100">
+                    <div class="card-header border-secondary text-secondary small">Descrição pública</div>
+                    <div class="card-body small text-light" style="white-space:pre-wrap"><?= e($m['public_description']) ?></div>
+                </div>
+            </div>
+            <?php endif; ?>
+            <?php if ($m['private_story']): ?>
+            <div class="col-12 col-md-4">
+                <div class="card bg-dark border-warning h-100">
+                    <div class="card-header border-warning text-warning small"><i class="fa fa-lock me-1"></i>História</div>
+                    <div class="card-body small text-light" style="white-space:pre-wrap"><?= e($m['private_story']) ?></div>
+                </div>
+            </div>
+            <?php endif; ?>
+            <?php if ($m['private_notes']): ?>
+            <div class="col-12 col-md-4">
+                <div class="card bg-dark border-secondary h-100">
+                    <div class="card-header border-secondary text-secondary small"><i class="fa fa-lock me-1"></i>Notas privadas</div>
+                    <div class="card-body small text-light" style="white-space:pre-wrap"><?= e($m['private_notes']) ?></div>
+                </div>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+</div>
 
 <?php elseif ($action === 'add' || $action === 'edit'): ?>
 <!-- ADD / EDIT FORM -->
@@ -682,22 +879,31 @@ require_once __DIR__ . '/../includes/header_admin.php';
 
             <!-- Emotional rating -->
             <div class="card bg-dark border-secondary mb-4">
-                <div class="card-header border-secondary"><i class="fa fa-lock me-1 text-warning"></i>Avaliação Emocional</div>
+                <div class="card-header border-secondary"><i class="fa fa-heart me-1 text-warning"></i>Avaliação Emocional</div>
                 <div class="card-body">
-                    <?php for ($r = 1; $r <= 5; $r++): ?>
-                        <div class="form-check">
+                    <?php
+                    $rating_opts = [
+                        1 => ['fa-circle',  'secondary', 'Pouco importante'],
+                        2 => ['fa-heart',   'info',      'Gosto da peça'],
+                        3 => ['fa-heart',   'success',   'Muito importante'],
+                        4 => ['fa-gem',     'warning',   'Especial'],
+                        5 => ['fa-lock',    'danger',    'Nunca vender'],
+                    ];
+                    foreach ($rating_opts as $r => [$icon, $color, $rlabel]):
+                        $checked = $editing && (int)$editing['emotional_rating'] === $r ? 'checked' : '';
+                    ?>
+                        <div class="form-check mb-1">
                             <input class="form-check-input" type="radio" name="emotional_rating"
-                                   id="rating<?= $r ?>" value="<?= $r ?>"
-                                   <?= $editing && (int)$editing['emotional_rating'] === $r ? 'checked' : '' ?>>
-                            <label class="form-check-label text-secondary" for="rating<?= $r ?>">
-                                <?= $r ?> — <?= h(emotional_rating_label($r)) ?>
+                                   id="rating<?= $r ?>" value="<?= $r ?>" <?= $checked ?>>
+                            <label class="form-check-label" for="rating<?= $r ?>">
+                                <span class="badge bg-<?= $color ?>"><i class="fa <?= $icon ?> me-1"></i><?= $rlabel ?></span>
                             </label>
                         </div>
-                    <?php endfor; ?>
-                    <div class="form-check mt-1">
+                    <?php endforeach; ?>
+                    <div class="form-check mt-2">
                         <input class="form-check-input" type="radio" name="emotional_rating" id="ratingNone" value=""
                                <?= !$editing || !$editing['emotional_rating'] ? 'checked' : '' ?>>
-                        <label class="form-check-label text-secondary" for="ratingNone">Não avaliada</label>
+                        <label class="form-check-label text-secondary" for="ratingNone"><i class="fa fa-minus me-1"></i>Não avaliada</label>
                     </div>
                 </div>
             </div>

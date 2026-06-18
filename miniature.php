@@ -22,7 +22,26 @@ $photos   = get_miniature_photos($id);
 $tags     = get_miniature_tags($id);
 $adjacent = get_adjacent_miniatures($id);
 // Increment view counter (best-effort, ignore errors)
-try { db()->prepare('UPDATE miniatures SET views = views + 1 WHERE id = ?')->execute([$id]); } catch (Throwable) {}
+try {
+    db()->prepare('UPDATE miniatures SET views = views + 1 WHERE id = ?')->execute([$id]);
+    // Invalidate dashboard stats cache so top_viewed reflects the new count
+    if (session_status() === PHP_SESSION_NONE) session_start();
+    unset($_SESSION['stats_cache']);
+} catch (Throwable $e) {}
+
+// ─── Public rating (POST) ─────────────────────────────────────────────────────
+$rating_msg = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['public_rating'])) {
+    $submitted = (int) $_POST['public_rating'];
+    $ip        = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
+    if (submit_public_rating($id, $submitted, $ip)) {
+        $rating_msg = 'ok';
+    }
+    header('Location: ' . mini_url($miniature) . '#rating');
+    exit;
+}
+
+$public_rating = get_public_rating($id);
 $page_title = $miniature['name'];
 
 // Find primary photo
@@ -148,22 +167,42 @@ require_once __DIR__ . '/includes/header_public.php';
             </div>
         <?php endif; ?>
 
-        <!-- Stars -->
-        <?php if ($miniature['emotional_rating']): ?>
-            <div class="d-flex align-items-center gap-1 mb-3">
-                <?php for ($i = 1; $i <= 5; $i++): ?>
-                    <i class="fa fa-star fa-sm <?= $i <= (int)$miniature['emotional_rating'] ? 'text-warning' : 'text-secondary opacity-25' ?>"></i>
-                <?php endfor; ?>
-                <span class="text-secondary ms-1" style="font-size:.75rem;">avaliação pessoal</span>
-            </div>
-        <?php endif; ?>
-
         <!-- Description -->
         <?php if ($miniature['public_description']): ?>
             <div class="text-light mb-4" style="line-height:1.7; font-size:.95rem;">
                 <?= nl2br(e($miniature['public_description'])) ?>
             </div>
         <?php endif; ?>
+
+        <!-- Public star rating -->
+        <div id="rating" class="mb-4">
+            <?php if ($public_rating['count'] > 0): ?>
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <?php
+                        $avg = $public_rating['avg'];
+                        for ($s = 1; $s <= 5; $s++):
+                            if ($avg >= $s) $cls = 'text-warning';
+                            elseif ($avg >= $s - 0.5) $cls = 'text-warning opacity-50';
+                            else $cls = 'text-secondary opacity-25';
+                    ?>
+                        <i class="fa fa-star <?= $cls ?>"></i>
+                    <?php endfor; ?>
+                    <span class="text-secondary small"><?= number_format($avg, 1, ',', '') ?> (<?= $public_rating['count'] ?> avaliação<?= $public_rating['count'] !== 1 ? 'ões' : '' ?>)</span>
+                </div>
+            <?php endif; ?>
+            <form method="post" action="<?= e(mini_url($miniature)) ?>#rating" class="d-flex align-items-center gap-2">
+                <span class="text-secondary small">Avaliar:</span>
+                <div class="star-picker d-flex gap-1">
+                    <?php for ($s = 1; $s <= 5; $s++): ?>
+                        <button type="submit" name="public_rating" value="<?= $s ?>"
+                                class="btn p-0 border-0 bg-transparent text-warning star-rate-btn"
+                                style="font-size:1.3rem;line-height:1;" title="<?= $s ?> estrela<?= $s > 1 ? 's' : '' ?>">
+                            <i class="fa fa-star"></i>
+                        </button>
+                    <?php endfor; ?>
+                </div>
+            </form>
+        </div>
 
         <!-- Actions -->
         <div class="mt-auto pt-2 d-flex gap-2 flex-wrap">

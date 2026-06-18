@@ -121,6 +121,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
         'views'     => "ALTER TABLE miniatures ADD COLUMN views INT UNSIGNED NOT NULL DEFAULT 0 AFTER is_public",
     ];
 
+    // Table migrations — checked via information_schema.tables
+    $tables = [
+        'miniature_ratings' => "CREATE TABLE miniature_ratings (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            miniature_id INT UNSIGNED NOT NULL,
+            ip_hash VARCHAR(64) NOT NULL,
+            rating TINYINT UNSIGNED NOT NULL CHECK (rating BETWEEN 1 AND 5),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_mini_ip (miniature_id, ip_hash),
+            FOREIGN KEY (miniature_id) REFERENCES miniatures(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    ];
+    $check_table = db()->prepare(
+        "SELECT COUNT(*) FROM information_schema.tables
+         WHERE table_schema = DATABASE() AND table_name = ?"
+    );
+    foreach ($tables as $tbl => $sql) {
+        try {
+            $check_table->execute([$tbl]);
+            if ((int) $check_table->fetchColumn() > 0) { $skipped[] = 'table:' . $tbl; continue; }
+            db()->exec($sql);
+            $applied[] = 'table:' . $tbl;
+        } catch (Throwable $e) {
+            $errors[] = 'table:' . $tbl . ': ' . $e->getMessage();
+        }
+    }
+
     $applied = [];
     $errors  = [];
     $skipped = [];

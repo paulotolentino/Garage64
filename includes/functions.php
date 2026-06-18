@@ -469,6 +469,36 @@ function wishlist_status_label(string $status): string {
     };
 }
 
+function get_public_rating(int $miniature_id): array {
+    try {
+        $stmt = db()->prepare(
+            'SELECT ROUND(AVG(rating),1) AS avg_rating, COUNT(*) AS count
+             FROM miniature_ratings WHERE miniature_id = ?'
+        );
+        $stmt->execute([$miniature_id]);
+        $row = $stmt->fetch();
+        return ['avg' => (float)($row['avg_rating'] ?? 0), 'count' => (int)($row['count'] ?? 0)];
+    } catch (Throwable $e) {
+        return ['avg' => 0, 'count' => 0];
+    }
+}
+
+function submit_public_rating(int $miniature_id, int $rating, string $ip): bool {
+    if ($rating < 1 || $rating > 5) return false;
+    try {
+        $ip_hash = hash('sha256', $ip);
+        $stmt = db()->prepare(
+            'INSERT INTO miniature_ratings (miniature_id, ip_hash, rating)
+             VALUES (?, ?, ?)
+             ON DUPLICATE KEY UPDATE rating = VALUES(rating)'
+        );
+        $stmt->execute([$miniature_id, $ip_hash, $rating]);
+        return true;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
 function emotional_rating_label(int $rating): string {
     return match ($rating) {
         1 => 'Pouco importante',
@@ -478,6 +508,18 @@ function emotional_rating_label(int $rating): string {
         5 => 'Nunca vender',
         default => '',
     };
+}
+
+function emotional_rating_badge(int $rating): string {
+    [$icon, $color, $label] = match ($rating) {
+        1 => ['fa-circle',       'secondary', 'Pouco importante'],
+        2 => ['fa-heart',        'info',      'Gosto da peça'],
+        3 => ['fa-heart',        'success',   'Muito importante'],
+        4 => ['fa-gem',          'warning',   'Especial'],
+        5 => ['fa-lock',         'danger',    'Nunca vender'],
+        default => ['fa-circle', 'secondary', ''],
+    };
+    return '<span class="badge bg-' . $color . '"><i class="fa ' . $icon . ' me-1"></i>' . $label . '</span>';
 }
 
 function photo_url(?string $file_path): string {
