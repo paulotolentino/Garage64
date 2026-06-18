@@ -5,7 +5,15 @@ require_once __DIR__ . '/../includes/functions.php';
 
 require_login();
 
-$stats      = get_stats();
+// Stats with 5-min session cache
+$cache_key = 'stats_cache';
+$cache_ttl = 300;
+if (isset($_SESSION[$cache_key]) && (time() - $_SESSION[$cache_key]['ts']) < $cache_ttl) {
+    $stats = $_SESSION[$cache_key]['data'];
+} else {
+    $stats = get_stats();
+    $_SESSION[$cache_key] = ['ts' => time(), 'data' => $stats];
+}
 $page_title = 'Dashboard';
 
 require_once __DIR__ . '/../includes/header_admin.php';
@@ -116,68 +124,49 @@ $app_pct       = ($both_paid && $appreciation !== null) ? ($appreciation / $both
 </div>
 
 <div class="row g-4">
-    <!-- By Manufacturer -->
-    <div class="col-12 col-lg-4">
-        <div class="card bg-dark border-secondary h-100">
+    <!-- By Manufacturer — doughnut -->
+    <div class="col-12 col-lg-4">        <div class="card bg-dark border-secondary h-100">
             <div class="card-header border-secondary text-light">
                 <i class="fa fa-industry me-1 text-warning"></i>Por Fabricante <small class="text-secondary">(top 10)</small>
             </div>
-            <div class="card-body p-0">
-                <ul class="list-group list-group-flush bg-dark">
-                    <?php foreach ($stats['by_manufacturer'] as $row): ?>
-                        <li class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center text-light">
-                            <span><?= e($row['manufacturer']) ?></span>
-                            <span class="badge bg-warning text-dark"><?= $row['total'] ?></span>
-                        </li>
-                    <?php endforeach; ?>
-                    <?php if (empty($stats['by_manufacturer'])): ?>
-                        <li class="list-group-item bg-dark border-secondary text-secondary">Sem dados</li>
-                    <?php endif; ?>
-                </ul>
+            <div class="card-body d-flex align-items-center justify-content-center" style="min-height:220px;">
+                <?php if (!empty($stats['by_manufacturer'])): ?>
+                    <canvas id="chartManufacturer" style="max-height:220px;"></canvas>
+                <?php else: ?>
+                    <span class="text-secondary">Sem dados</span>
+                <?php endif; ?>
             </div>
         </div>
     </div>
 
-    <!-- By Scale -->
+    <!-- By Scale — horizontal bar -->
     <div class="col-12 col-lg-4">
         <div class="card bg-dark border-secondary h-100">
             <div class="card-header border-secondary text-light">
                 <i class="fa fa-ruler me-1 text-warning"></i>Por Escala
             </div>
-            <div class="card-body p-0">
-                <ul class="list-group list-group-flush bg-dark">
-                    <?php foreach ($stats['by_scale'] as $row): ?>
-                        <li class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center text-light">
-                            <span><?= e($row['scale']) ?></span>
-                            <span class="badge bg-warning text-dark"><?= $row['total'] ?></span>
-                        </li>
-                    <?php endforeach; ?>
-                    <?php if (empty($stats['by_scale'])): ?>
-                        <li class="list-group-item bg-dark border-secondary text-secondary">Sem dados</li>
-                    <?php endif; ?>
-                </ul>
+            <div class="card-body d-flex align-items-center justify-content-center" style="min-height:220px;">
+                <?php if (!empty($stats['by_scale'])): ?>
+                    <canvas id="chartScale" style="max-height:220px;"></canvas>
+                <?php else: ?>
+                    <span class="text-secondary">Sem dados</span>
+                <?php endif; ?>
             </div>
         </div>
     </div>
 
-    <!-- By Category -->
+    <!-- By Category — doughnut -->
     <div class="col-12 col-lg-4">
         <div class="card bg-dark border-secondary h-100">
             <div class="card-header border-secondary text-light">
                 <i class="fa fa-tags me-1 text-warning"></i>Por Categoria
             </div>
-            <div class="card-body p-0">
-                <ul class="list-group list-group-flush bg-dark">
-                    <?php foreach ($stats['by_category'] as $row): ?>
-                        <li class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center text-light">
-                            <span><?= e($row['name'] ?? 'Sem categoria') ?></span>
-                            <span class="badge bg-warning text-dark"><?= $row['total'] ?></span>
-                        </li>
-                    <?php endforeach; ?>
-                    <?php if (empty($stats['by_category'])): ?>
-                        <li class="list-group-item bg-dark border-secondary text-secondary">Sem dados</li>
-                    <?php endif; ?>
-                </ul>
+            <div class="card-body d-flex align-items-center justify-content-center" style="min-height:220px;">
+                <?php if (!empty($stats['by_category'])): ?>
+                    <canvas id="chartCategory" style="max-height:220px;"></canvas>
+                <?php else: ?>
+                    <span class="text-secondary">Sem dados</span>
+                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -194,7 +183,75 @@ $app_pct       = ($both_paid && $appreciation !== null) ? ($appreciation / $both
     </div>
 </div>
 
+<?php if (!empty($stats['top_viewed'])): ?>
+<div class="row mt-4">
+    <div class="col-12 col-lg-6">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header border-secondary text-light">
+                <i class="fa fa-fire me-1 text-warning"></i>Mais visualizadas
+            </div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush bg-dark">
+                    <?php foreach ($stats['top_viewed'] as $i => $tv): ?>
+                        <li class="list-group-item bg-dark border-secondary d-flex align-items-center gap-2 text-light">
+                            <span class="text-warning fw-bold" style="width:20px;text-align:right;"><?= $i + 1 ?></span>
+                            <span class="flex-grow-1">
+                                <a href="<?= e(mini_url($tv)) ?>" class="text-light text-decoration-none"><?= e($tv['name']) ?></a>
+                                <span class="text-secondary small ms-1"><?= e($tv['manufacturer']) ?></span>
+                            </span>
+                            <span class="badge bg-secondary"><?= $tv['views'] ?> <i class="fa fa-eye ms-1"></i></span>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <?php require_once __DIR__ . '/../includes/footer_admin.php'; ?>
+<script>
+Chart.defaults.color = '#9ca3af';
+Chart.defaults.borderColor = '#2a2d3a';
+const PALETTE = ['#ffc107','#e67e22','#e74c3c','#9b59b6','#3498db','#1abc9c','#2ecc71','#f39c12','#d35400','#c0392b'];
+
+<?php if (!empty($stats['by_manufacturer'])): ?>
+new Chart(document.getElementById('chartManufacturer'), {
+    type: 'doughnut',
+    data: {
+        labels: <?= json_encode(array_column($stats['by_manufacturer'], 'manufacturer')) ?>,
+        datasets: [{ data: <?= json_encode(array_column($stats['by_manufacturer'], 'total')) ?>, backgroundColor: PALETTE, borderWidth: 2, borderColor: '#12141c' }]
+    },
+    options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10 } } }, cutout: '60%' }
+});
+<?php endif; ?>
+
+<?php if (!empty($stats['by_scale'])): ?>
+new Chart(document.getElementById('chartScale'), {
+    type: 'bar',
+    data: {
+        labels: <?= json_encode(array_column($stats['by_scale'], 'scale')) ?>,
+        datasets: [{ data: <?= json_encode(array_column($stats['by_scale'], 'total')) ?>, backgroundColor: '#ffc107', borderRadius: 4 }]
+    },
+    options: {
+        indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: { x: { ticks: { stepSize: 1 }, grid: { color: '#2a2d3a' } }, y: { grid: { display: false } } }
+    }
+});
+<?php endif; ?>
+
+<?php if (!empty($stats['by_category'])): ?>
+new Chart(document.getElementById('chartCategory'), {
+    type: 'doughnut',
+    data: {
+        labels: <?= json_encode(array_map(fn($r) => $r['name'] ?? 'Sem categoria', $stats['by_category'])) ?>,
+        datasets: [{ data: <?= json_encode(array_column($stats['by_category'], 'total')) ?>, backgroundColor: PALETTE, borderWidth: 2, borderColor: '#12141c' }]
+    },
+    options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10 } } }, cutout: '60%' }
+});
+<?php endif; ?>
+</script>
 <script>
 (function () {
     const KEY  = 'g64_fin_hidden';

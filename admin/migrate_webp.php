@@ -118,6 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
     // Schema migrations (column additions) — checked via information_schema.columns
     $columns = [
         'is_public' => "ALTER TABLE miniatures ADD COLUMN is_public TINYINT(1) NOT NULL DEFAULT 1 AFTER emotional_rating",
+        'views'     => "ALTER TABLE miniatures ADD COLUMN views INT UNSIGNED NOT NULL DEFAULT 0 AFTER is_public",
     ];
 
     $applied = [];

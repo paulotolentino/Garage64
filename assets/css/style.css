@@ -143,7 +143,7 @@ a:hover {
 }
 
 .breadcrumb-item.active {
-  color: #d0d3de;
+  color: #e8eaf0;
 }
 
 /* ── Footer ────────────────────────────────────── */
@@ -362,5 +362,108 @@ body.admin-layout {
   }
   .mini-name {
     font-size: 0.8rem;
+  }
+}
+
+/* ── Skeleton loading ───────────────────────────── */
+@keyframes g64-shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+.mini-thumb.loading {
+  background: linear-gradient(90deg, #1a1d27 25%, #252838 50%, #1a1d27 75%);
+  background-size: 800px 100%;
+  animation: g64-shimmer 1.4s infinite linear;
+}
+
+/* ── Scroll-to-top button ───────────────────────── */
+#scrollTop {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--g64-yellow);
+  color: #000;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+#scrollTop.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+#scrollTop:hover {
+  transform: translateY(-2px);
+}
+
+/* ── List/Grid view ─────────────────────────────── */
+.view-list .mini-card {
+  flex-direction: row;
+  align-items: center;
+}
+.view-list .mini-card-img-wrap {
+  width: 64px;
+  min-width: 64px;
+  aspect-ratio: 1;
+  flex-shrink: 0;
+}
+.view-list .mini-card .card-body {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem !important;
+  flex-wrap: wrap;
+}
+.view-list .col {
+  flex: 0 0 100%;
+  max-width: 100%;
+}
+
+/* ── Print styles ───────────────────────────────── */
+@media print {
+  .navbar,
+  .footer,
+  nav[aria-label="breadcrumb"],
+  #shareBtn,
+  .mini-adj-link,
+  .btn,
+  .modal {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .text-light,
+  .text-secondary,
+  .text-warning {
+    color: #000 !important;
+  }
+  .card {
+    border: 1px solid #ccc !important;
+    background: #fff !important;
+  }
+  .mini-detail-photo img {
+    max-height: 300px;
+  }
+  .badge {
+    border: 1px solid #999;
+    background: #eee !important;
+    color: #000 !important;
   }
 }

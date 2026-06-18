@@ -7,6 +7,38 @@ require_login();
 
 $action = $_GET['action'] ?? 'list';
 
+// ─── ROTATE PHOTO (AJAX) ─────────────────────────────────────────────────────
+if ($action === 'rotate_photo' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
+    header('Content-Type: application/json');
+    $photo_id     = (int) ($_POST['photo_id']     ?? 0);
+    $miniature_id = (int) ($_POST['miniature_id'] ?? 0);
+    $degrees      = (int) ($_POST['degrees']       ?? 90);
+    if (!in_array($degrees, [90, 180, 270], true)) $degrees = 90;
+
+    $stmt = db()->prepare('SELECT file_path FROM miniature_photos WHERE id = ? AND miniature_id = ?');
+    $stmt->execute([$photo_id, $miniature_id]);
+    $photo = $stmt->fetch();
+    if (!$photo) { echo json_encode(['ok'=>false,'error'=>'foto não encontrada']); exit; }
+
+    $orig_path  = UPLOADS_DIR . $photo['file_path'];
+    $thumb_path = UPLOADS_DIR . preg_replace('/\.webp$/i', '_thumb.webp', $photo['file_path']);
+
+    foreach ([$orig_path, $thumb_path] as $path) {
+        if (!file_exists($path)) continue;
+        $img = imagecreatefromwebp($path);
+        if (!$img) continue;
+        // imagerotate: positive = counter-clockwise; invert for intuitive CW
+        $rotated = imagerotate($img, 360 - $degrees, 0);
+        imagedestroy($img);
+        imagewebp($rotated, $path, WEBP_QUALITY);
+        imagedestroy($rotated);
+    }
+
+    echo json_encode(['ok' => true, 'bust' => time()]);
+    exit;
+}
+
 // ─── REORDER PHOTOS (AJAX) ───────────────────────────────────────────────────
 if ($action === 'reorder_photos' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
@@ -357,12 +389,16 @@ require_once __DIR__ . '/../includes/header_admin.php';
             <a class="page-link bg-dark border-secondary text-light"
                href="?action=list&page=<?= $admin_page - 1 . $qs_base ?>">&laquo;</a>
         </li>
-        <?php for ($p = 1; $p <= $admin_total_pages; $p++): ?>
-            <li class="page-item <?= $p === $admin_page ? 'active' : '' ?>">
-                <a class="page-link <?= $p === $admin_page ? 'bg-warning border-warning text-dark' : 'bg-dark border-secondary text-light' ?>"
-                   href="?action=list&page=<?= $p . $qs_base ?>"><?= $p ?></a>
-            </li>
-        <?php endfor; ?>
+        <?php foreach (pagination_range($admin_page, $admin_total_pages) as $p): ?>
+            <?php if ($p === null): ?>
+                <li class="page-item disabled"><span class="page-link bg-dark border-secondary text-secondary">&hellip;</span></li>
+            <?php else: ?>
+                <li class="page-item <?= $p === $admin_page ? 'active' : '' ?>">
+                    <a class="page-link <?= $p === $admin_page ? 'bg-warning border-warning text-dark' : 'bg-dark border-secondary text-light' ?>"
+                       href="?action=list&page=<?= $p . $qs_base ?>"><?= $p ?></a>
+                </li>
+            <?php endif; ?>
+        <?php endforeach; ?>
         <li class="page-item <?= $admin_page >= $admin_total_pages ? 'disabled' : '' ?>">
             <a class="page-link bg-dark border-secondary text-light"
                href="?action=list&page=<?= $admin_page + 1 . $qs_base ?>">&raquo;</a>
@@ -558,24 +594,40 @@ require_once __DIR__ . '/../includes/header_admin.php';
                 <div class="card-body">
                     <?php if (!empty($edit_photos)): ?>
                         <p class="text-secondary small mb-2"><i class="fa fa-grip-vertical me-1"></i>Arraste para reordenar.</p>
-                        <div class="d-flex flex-wrap gap-2 mb-3" id="sortable-photos" data-miniature-id="<?= $editing['id'] ?>">
+                        <div class="d-flex flex-wrap gap-3 mb-3" id="sortable-photos" data-miniature-id="<?= $editing['id'] ?>">
                             <?php foreach ($edit_photos as $ph): ?>
-                                <div class="position-relative photo-thumb-admin" data-photo-id="<?= $ph['id'] ?>" style="cursor:grab">
-                                    <img src="<?= e(photo_url($ph['file_path'])) ?>"
-                                         alt=""
-                                         class="rounded <?= $ph['is_primary'] ? 'border border-warning border-2' : '' ?>"
-                                         style="width:80px;height:80px;object-fit:cover;pointer-events:none;">
-                                    <?php if ($ph['is_primary']): ?>
-                                        <span class="badge bg-warning text-dark position-absolute bottom-0 start-0" style="font-size:.6rem">Principal</span>
-                                    <?php else: ?>
-                                        <button type="submit" name="primary_photo_id" value="<?= $ph['id'] ?>"
-                                                class="btn btn-xs btn-outline-warning position-absolute bottom-0 start-0"
-                                                style="font-size:.55rem;padding:1px 3px;" title="Definir como principal">★</button>
-                                    <?php endif; ?>
-                                    <button type="submit" name="delete_photo_id" value="<?= $ph['id'] ?>"
-                                            class="btn btn-xs btn-danger position-absolute top-0 end-0"
-                                            style="font-size:.55rem;padding:1px 4px;line-height:1;"
-                                            onclick="return confirm('Remover esta foto?')" title="Remover foto">✕</button>
+                                <div class="position-relative photo-thumb-admin" data-photo-id="<?= $ph['id'] ?>" style="cursor:grab;width:150px;">
+                                    <div class="rounded overflow-hidden <?= $ph['is_primary'] ? 'border border-warning border-2' : 'border border-secondary' ?>"
+                                         style="width:150px;height:150px;background:#000;display:flex;align-items:center;justify-content:center;">
+                                        <img src="<?= e(photo_url($ph['file_path'])) ?>"
+                                             alt=""
+                                             class="photo-admin-img"
+                                             style="max-width:150px;max-height:150px;object-fit:contain;pointer-events:none;display:block;">
+                                    </div>
+                                    <div class="d-flex gap-1 mt-1">
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-info flex-grow-1 rotate-btn"
+                                                data-photo-id="<?= $ph['id'] ?>"
+                                                data-miniature-id="<?= $editing['id'] ?>"
+                                                title="Girar 90°">
+                                            <i class="fa fa-rotate-right"></i>
+                                        </button>
+                                        <?php if ($ph['is_primary']): ?>
+                                            <span class="btn btn-sm btn-warning flex-grow-1 disabled pe-none">
+                                                <i class="fa fa-star"></i>
+                                            </span>
+                                        <?php else: ?>
+                                            <button type="submit" name="primary_photo_id" value="<?= $ph['id'] ?>"
+                                                    class="btn btn-sm btn-outline-warning flex-grow-1" title="Definir como principal">
+                                                <i class="fa fa-star"></i>
+                                            </button>
+                                        <?php endif; ?>
+                                        <button type="submit" name="delete_photo_id" value="<?= $ph['id'] ?>"
+                                                class="btn btn-sm btn-outline-danger"
+                                                onclick="return confirm('Remover esta foto?')" title="Remover foto">
+                                            <i class="fa fa-trash"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             <?php endforeach; ?>
                         </div>

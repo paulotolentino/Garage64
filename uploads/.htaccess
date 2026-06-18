@@ -1,2 +1,10 @@
 Options -Indexes
 Require all granted
+
+# Disable caching so rotated/replaced images show immediately
+<IfModule mod_headers.c>
+    Header set Cache-Control "no-cache, must-revalidate"
+    Header unset Expires
+    Header unset ETag
+</IfModule>
+FileETag None

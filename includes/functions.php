@@ -308,7 +308,15 @@ function get_stats(): array {
          FROM miniatures"
     )->fetch();
 
-    return compact('total', 'by_scale', 'by_manufacturer', 'by_category', 'by_status', 'financial');
+    try {
+        $top_viewed = db()->query(
+            "SELECT id, name, manufacturer, views FROM miniatures WHERE is_public = 1 AND views > 0 ORDER BY views DESC LIMIT 5"
+        )->fetchAll();
+    } catch (\PDOException $e) {
+        $top_viewed = [];
+    }
+
+    return compact('total', 'by_scale', 'by_manufacturer', 'by_category', 'by_status', 'financial', 'top_viewed');
 }
 
 function get_adjacent_miniatures(int $id): array {

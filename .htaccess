@@ -1,6 +1,8 @@
 Options -Indexes
 DirectoryIndex index.php
 
+ErrorDocument 404 /404.php
+
 # Security headers
 <IfModule mod_headers.c>
     Header always set X-Content-Type-Options "nosniff"
@@ -45,7 +47,7 @@ DirectoryIndex index.php
     RewriteRule ^(.+?)/?$ $1.php [L]
 </IfModule>
 
-# Cache static assets
+# Cache static assets — but NOT uploads (user-edited images must always be fresh)
 <IfModule mod_expires.c>
     ExpiresActive On
     ExpiresByType image/jpeg "access plus 1 month"
@@ -54,6 +56,14 @@ DirectoryIndex index.php
     ExpiresByType image/svg+xml "access plus 1 month"
     ExpiresByType text/css "access plus 1 week"
     ExpiresByType application/javascript "access plus 1 week"
+</IfModule>
+
+# Uploads must never be aggressively cached (rotation/replace needs to show immediately)
+<IfModule mod_headers.c>
+    <FilesMatch "^uploads/">
+        Header set Cache-Control "no-cache, must-revalidate"
+        Header unset Expires
+    </FilesMatch>
 </IfModule>
 
 # Compress responses

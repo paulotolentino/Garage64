@@ -33,6 +33,10 @@ require_once __DIR__ . '/includes/header_public.php';
 <div class="d-flex align-items-center mb-4 flex-wrap gap-2">
     <h1 class="h3 mb-0 me-auto"><i class="fa fa-car me-2 text-warning"></i>Coleção de Miniaturas</h1>
     <span class="badge bg-secondary fs-6"><?= $total ?> peça<?= $total !== 1 ? 's' : '' ?></span>
+    <div class="btn-group btn-group-sm" role="group" aria-label="Visualização">
+        <button id="viewGrid" class="btn btn-warning" title="Grade"><i class="fa fa-grip"></i></button>
+        <button id="viewList" class="btn btn-outline-secondary" title="Lista"><i class="fa fa-list"></i></button>
+    </div>
 </div>
 
 <!-- Filters -->
@@ -132,7 +136,7 @@ $has_active_filters = array_filter(array_intersect_key(
         <?php endif; ?>
     </div>
 <?php else: ?>
-    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-5 g-3">
+    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-5 g-3" id="miniGrid">
         <?php foreach ($miniatures as $mini): ?>
             <div class="col">
                 <a href="<?= e(mini_url($mini)) ?>" class="text-decoration-none">
@@ -196,3 +200,30 @@ $has_active_filters = array_filter(array_intersect_key(
 <?php endif; ?>
 
 <?php require_once __DIR__ . '/includes/footer_public.php'; ?>
+<script>
+(function () {
+    const grid    = document.getElementById('miniGrid');
+    const btnGrid = document.getElementById('viewGrid');
+    const btnList = document.getElementById('viewList');
+    if (!grid) return;
+    const KEY = 'g64_view';
+    function setView(v) {
+        if (v === 'list') {
+            grid.classList.add('view-list');
+            grid.classList.remove('row-cols-2','row-cols-md-3','row-cols-lg-4','row-cols-xl-5');
+            grid.classList.add('row-cols-1');
+            btnList.classList.replace('btn-outline-secondary','btn-warning');
+            btnGrid.classList.replace('btn-warning','btn-outline-secondary');
+        } else {
+            grid.classList.remove('view-list','row-cols-1');
+            grid.classList.add('row-cols-2','row-cols-md-3','row-cols-lg-4','row-cols-xl-5');
+            btnGrid.classList.replace('btn-outline-secondary','btn-warning');
+            btnList.classList.replace('btn-warning','btn-outline-secondary');
+        }
+        localStorage.setItem(KEY, v);
+    }
+    setView(localStorage.getItem(KEY) || 'grid');
+    btnGrid.addEventListener('click', () => setView('grid'));
+    btnList.addEventListener('click', () => setView('list'));
+})();
+</script>
