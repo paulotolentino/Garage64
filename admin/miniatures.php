@@ -57,6 +57,21 @@ if ($action === 'reorder_photos' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
+// ─── TOGGLE FEATURED (AJAX) ──────────────────────────────────────────────────
+if ($action === 'toggle_featured' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
+    header('Content-Type: application/json');
+    $id = (int) ($_POST['id'] ?? 0);
+    $stmt = db()->prepare('SELECT is_featured FROM miniatures WHERE id = ?');
+    $stmt->execute([$id]);
+    $mini = $stmt->fetch();
+    if (!$mini) { echo json_encode(['ok' => false]); exit; }
+    $new = $mini['is_featured'] ? 0 : 1;
+    db()->prepare('UPDATE miniatures SET is_featured = ? WHERE id = ?')->execute([$new, $id]);
+    echo json_encode(['ok' => true, 'is_featured' => $new]);
+    exit;
+}
+
 // ─── BULK ACTIONS ────────────────────────────────────────────────────────────
 if ($action === 'bulk' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
@@ -67,15 +82,19 @@ if ($action === 'bulk' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         match ($bulk_action) {
             'make_public'   => db()->prepare("UPDATE miniatures SET is_public = 1 WHERE id IN ($placeholders)")->execute($ids),
             'make_private'  => db()->prepare("UPDATE miniatures SET is_public = 0 WHERE id IN ($placeholders)")->execute($ids),
-            'status_open'   => db()->prepare("UPDATE miniatures SET status = 'open'    WHERE id IN ($placeholders)")->execute($ids),
-            'status_sealed' => db()->prepare("UPDATE miniatures SET status = 'sealed'  WHERE id IN ($placeholders)")->execute($ids),
-            'status_display'=> db()->prepare("UPDATE miniatures SET status = 'display' WHERE id IN ($placeholders)")->execute($ids),
-            'status_storage'=> db()->prepare("UPDATE miniatures SET status = 'storage' WHERE id IN ($placeholders)")->execute($ids),
+            'feature'       => db()->prepare("UPDATE miniatures SET is_featured = 1 WHERE id IN ($placeholders)")->execute($ids),
+            'unfeature'     => db()->prepare("UPDATE miniatures SET is_featured = 0 WHERE id IN ($placeholders)")->execute($ids),
+            'status_open'   => db()->prepare("UPDATE miniatures SET `condition` = 'open'    WHERE id IN ($placeholders)")->execute($ids),
+            'status_sealed' => db()->prepare("UPDATE miniatures SET `condition` = 'sealed'  WHERE id IN ($placeholders)")->execute($ids),
+            'status_no_box' => db()->prepare("UPDATE miniatures SET `condition` = 'no_box'  WHERE id IN ($placeholders)")->execute($ids),
+            'status_display'=> db()->prepare("UPDATE miniatures SET location = 'display' WHERE id IN ($placeholders)")->execute($ids),
+            'status_storage'=> db()->prepare("UPDATE miniatures SET location = 'storage' WHERE id IN ($placeholders)")->execute($ids),
             default         => null,
         };
         flash(count($ids) . ' miniatura(s) atualizadas.');
     }
-    redirect('/admin/miniatures.php');
+    $return_page = max(1, (int) ($_POST['return_page'] ?? 1));
+    redirect('/admin/miniatures?page=' . $return_page);
 }
 
 // ─── DELETE ──────────────────────────────────────────────────────────────────
@@ -109,7 +128,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'scale'             => trim($_POST['scale'] ?? '') ?: null,
         'year'              => (int) ($_POST['year'] ?? 0) ?: null,
         'category_id'       => (int) ($_POST['category_id'] ?? 0) ?: null,
-        'status'            => $_POST['status'] ?? 'sealed',
+        'condition'         => in_array($_POST['condition'] ?? '', ['sealed','open','no_box']) ? $_POST['condition'] : 'sealed',
+        'location'          => in_array($_POST['location'] ?? '', ['display','storage']) ? $_POST['location'] : 'storage',
         'public_description'=> trim($_POST['public_description'] ?? '') ?: null,
         'private_story'     => trim($_POST['private_story'] ?? '') ?: null,
         'private_notes'     => trim($_POST['private_notes'] ?? '') ?: null,
@@ -119,6 +139,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'purchase_location' => trim($_POST['purchase_location'] ?? '') ?: null,
         'emotional_rating'  => (int) ($_POST['emotional_rating'] ?? 0) ?: null,
         'is_public'         => isset($_POST['is_public']) ? 1 : 0,
+        'is_featured'       => isset($_POST['is_featured']) ? 1 : 0,
+        'sort_order'        => max(0, (int) ($_POST['sort_order'] ?? 9999)),
     ];
 
     if (!$data['name'] || !$data['manufacturer']) {
@@ -127,15 +149,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($id) {
-        // Update
-        $sets = implode(', ', array_map(fn($k) => "$k = :$k", array_keys($data)));
+        // Update — backtick column names to avoid reserved-word conflicts (e.g. `condition`)
+        $sets = implode(', ', array_map(fn($k) => "`$k` = :$k", array_keys($data)));
         $data['id'] = $id;
         db()->prepare("UPDATE miniatures SET $sets WHERE id = :id")->execute($data);
         $miniature_id = $id;
         flash('Miniatura atualizada com sucesso.');
     } else {
         // Insert
-        $cols = implode(', ', array_keys($data));
+        $cols = implode(', ', array_map(fn($k) => "`$k`", array_keys($data)));
         $phs  = implode(', ', array_map(fn($k) => ":$k", array_keys($data)));
         db()->prepare("INSERT INTO miniatures ($cols) VALUES ($phs)")->execute($data);
         $miniature_id = (int) db()->lastInsertId();
@@ -195,7 +217,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         delete_photo((int) $_POST['delete_photo_id'], $miniature_id);
     }
 
-    redirect('/admin/miniatures?action=edit&id=' . $miniature_id);
+    $return_page = max(1, (int) ($_POST['return_page'] ?? 1));
+    redirect('/admin/miniatures?page=' . $return_page);
 }
 
 // ─── VIEW (detail) ───────────────────────────────────────────────────────────
@@ -213,7 +236,8 @@ if ($action === 'list') {
         'search'       => trim($_GET['search'] ?? ''),
         'manufacturer' => trim($_GET['manufacturer'] ?? ''),
         'category_id'  => (int) ($_GET['category_id'] ?? 0) ?: null,
-        'status'       => trim($_GET['status'] ?? ''),
+        'condition'    => trim($_GET['condition'] ?? ''),
+        'location'     => trim($_GET['location'] ?? ''),
         'is_public'    => null, // admin sees all
     ];
 
@@ -287,12 +311,17 @@ require_once __DIR__ . '/../includes/header_admin.php';
             </select>
         </div>
         <div class="col-6 col-md-2">
-            <select name="status" class="form-select form-select-sm bg-dark text-light border-secondary">
-                <option value="">Status</option>
-                <option value="open" <?= $filters['status'] === 'open' ? 'selected' : '' ?>>Aberta</option>
-                <option value="sealed" <?= $filters['status'] === 'sealed' ? 'selected' : '' ?>>Lacrada</option>
-                <option value="display" <?= $filters['status'] === 'display' ? 'selected' : '' ?>>Em exposição</option>
-                <option value="storage" <?= $filters['status'] === 'storage' ? 'selected' : '' ?>>Em armazenamento</option>
+            <select name="condition" class="form-select form-select-sm bg-dark text-light border-secondary">
+                <option value="">Embalagem</option>
+                <option value="sealed" <?= ($filters['condition'] ?? '') === 'sealed' ? 'selected' : '' ?>>Lacrada</option>
+                <option value="open"   <?= ($filters['condition'] ?? '') === 'open'   ? 'selected' : '' ?>>Aberta</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-2">
+            <select name="location" class="form-select form-select-sm bg-dark text-light border-secondary">
+                <option value="">Localização</option>
+                <option value="storage" <?= ($filters['location'] ?? '') === 'storage' ? 'selected' : '' ?>>Armazenada</option>
+                <option value="display" <?= ($filters['location'] ?? '') === 'display' ? 'selected' : '' ?>>Em exposição</option>
             </select>
         </div>
         <div class="col-6 col-md-2 d-flex gap-1">
@@ -305,6 +334,7 @@ require_once __DIR__ . '/../includes/header_admin.php';
 <div class="table-responsive">
 <form method="post" action="/admin/miniatures?action=bulk" id="bulkForm">
     <?= csrf_field() ?>
+    <input type="hidden" name="return_page" value="<?= $admin_page ?>">
     <!-- Bulk toolbar (hidden until selection) -->
     <div id="bulkBar" class="d-none mb-2 p-2 rounded border border-warning d-flex align-items-center gap-2 flex-wrap"
          style="background:rgba(255,193,7,.07)">
@@ -315,9 +345,16 @@ require_once __DIR__ . '/../includes/header_admin.php';
                 <option value="make_public">Tornar pública</option>
                 <option value="make_private">Tornar privada</option>
             </optgroup>
-            <optgroup label="Status">
-                <option value="status_open">Aberta</option>
+            <optgroup label="Destaque">
+                <option value="feature">Destacar</option>
+                <option value="unfeature">Remover destaque</option>
+            </optgroup>
+            <optgroup label="Embalagem">
                 <option value="status_sealed">Lacrada</option>
+                <option value="status_open">Aberta</option>
+                <option value="status_no_box">Sem caixa</option>
+            </optgroup>
+            <optgroup label="Localização">
                 <option value="status_display">Em exposição</option>
                 <option value="status_storage">Em armazenamento</option>
             </optgroup>
@@ -336,8 +373,10 @@ require_once __DIR__ . '/../includes/header_admin.php';
                 <th>Nome</th>
                 <th>Fabricante</th>
                 <th>Escala</th>
-                <th>Status</th>
+                <th>Embalagem</th>
+                <th>Local</th>
                 <th>Visível</th>
+                <th title="Destaque"><i class="fa fa-star text-warning"></i></th>
                 <th class="text-end">Ações</th>
             </tr>
         </thead>
@@ -357,7 +396,8 @@ require_once __DIR__ . '/../includes/header_admin.php';
                     <td><?= e($m['name']) ?></td>
                     <td><?= e($m['manufacturer']) ?></td>
                     <td><?= e($m['scale'] ?? '—') ?></td>
-                    <td><?= status_badge($m['status']) ?></td>
+                    <td><?= condition_badge($m['condition'] ?? 'sealed') ?></td>
+                    <td><?= location_badge($m['location'] ?? 'storage') ?></td>
                     <td>
                         <?php if ($m['is_public']): ?>
                             <span class="badge bg-success"><i class="fa fa-eye"></i></span>
@@ -365,11 +405,20 @@ require_once __DIR__ . '/../includes/header_admin.php';
                             <span class="badge bg-secondary"><i class="fa fa-eye-slash"></i></span>
                         <?php endif; ?>
                     </td>
+                    <td>
+                        <button type="button"
+                                class="btn btn-sm btn-link p-0 toggle-featured-btn"
+                                data-id="<?= $m['id'] ?>"
+                                data-featured="<?= (int)($m['is_featured'] ?? 0) ?>"
+                                title="<?= ($m['is_featured'] ?? 0) ? 'Remover destaque' : 'Destacar' ?>">
+                            <i class="fa fa-star <?= ($m['is_featured'] ?? 0) ? 'text-warning' : 'text-secondary opacity-25' ?>"></i>
+                        </button>
+                    </td>
                     <td class="text-end">
                         <a href="/admin/miniatures?action=view&id=<?= $m['id'] ?>" class="btn btn-outline-info btn-sm" title="Ver detalhes">
                             <i class="fa fa-circle-info"></i>
                         </a>
-                        <a href="/admin/miniatures?action=edit&id=<?= $m['id'] ?>" class="btn btn-outline-warning btn-sm">
+                        <a href="/admin/miniatures?action=edit&id=<?= $m['id'] ?>&return_page=<?= $admin_page ?>" class="btn btn-outline-warning btn-sm">
                             <i class="fa fa-edit"></i>
                         </a>
                         <a href="<?= e(mini_url($m)) ?>" target="_blank" class="btn btn-outline-secondary btn-sm">
@@ -421,6 +470,25 @@ require_once __DIR__ . '/../includes/header_admin.php';
 
 <script>
 (function () {
+    // ── Featured toggle ──────────────────────────────────────────────────────
+    document.querySelectorAll('.toggle-featured-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const id   = btn.dataset.id;
+            const icon = btn.querySelector('i');
+            const fd   = new FormData();
+            fd.append('id', id);
+            fd.append('csrf_token', document.querySelector('input[name=csrf_token]')?.value ?? '');
+            const res  = await fetch('/admin/miniatures?action=toggle_featured', {method:'POST', body:fd});
+            const data = await res.json();
+            if (data.ok) {
+                btn.dataset.featured = data.is_featured;
+                btn.title = data.is_featured ? 'Remover destaque' : 'Destacar';
+                icon.className = 'fa fa-star ' + (data.is_featured ? 'text-warning' : 'text-secondary opacity-25');
+            }
+        });
+    });
+
+    // ── Bulk selection ───────────────────────────────────────────────────────
     const checkAll = document.getElementById('checkAll');
     const bar      = document.getElementById('bulkBar');
     const countEl  = document.getElementById('bulkCount');
@@ -465,7 +533,6 @@ require_once __DIR__ . '/../includes/header_admin.php';
 <!-- VIEW DETAIL -->
 <?php
     $m  = $view_mini;
-    $status_labels = ['open'=>'Aberta','sealed'=>'Lacrada','display'=>'Em exposição','storage'=>'Em armazenamento'];
     $primary_photo = null;
     foreach ($view_photos as $vp) { if ($vp['is_primary']) { $primary_photo = $vp; break; } }
     if (!$primary_photo && !empty($view_photos)) $primary_photo = $view_photos[0];
@@ -534,7 +601,8 @@ require_once __DIR__ . '/../includes/header_admin.php';
                             <div class="col-4"><span class="text-secondary">Escala</span><br><span class="text-light"><?= e($m['scale'] ?? '—') ?></span></div>
                             <div class="col-4"><span class="text-secondary">Ano</span><br><span class="text-light"><?= $m['year'] ?? '—' ?></span></div>
                             <div class="col-4"><span class="text-secondary">Categoria</span><br><span class="text-light"><?= e($m['category_name'] ?? '—') ?></span></div>
-                            <div class="col-4"><span class="text-secondary">Status</span><br><?= status_badge($m['status']) ?></div>
+                            <div class="col-4"><span class="text-secondary">Embalagem</span><br><?= condition_badge($m['condition'] ?? 'sealed') ?></div>
+                            <div class="col-4"><span class="text-secondary">Localização</span><br><?= location_badge($m['location'] ?? 'storage') ?></div>
                             <div class="col-4">
                                 <span class="text-secondary">Visibilidade</span><br>
                                 <?php if ($m['is_public']): ?>
@@ -658,6 +726,7 @@ require_once __DIR__ . '/../includes/header_admin.php';
 <form method="post" enctype="multipart/form-data">
     <?= csrf_field() ?>
     <input type="hidden" name="id" value="<?= $editing ? $editing['id'] : '' ?>">
+    <input type="hidden" name="return_page" value="<?= max(1, (int)($_GET['return_page'] ?? 1)) ?>">
 
     <div class="row g-4">
         <!-- Left column -->
@@ -735,14 +804,18 @@ require_once __DIR__ . '/../includes/header_admin.php';
                             </select>
                         </div>
                         <div class="col-12 col-md-6">
-                            <label class="form-label text-secondary">Status</label>
-                            <select name="status" class="form-select bg-dark text-light border-secondary">
-                                <?php foreach (['open' => 'Aberta', 'sealed' => 'Lacrada', 'display' => 'Em exposição', 'storage' => 'Em armazenamento'] as $val => $label): ?>
-                                    <option value="<?= $val ?>"
-                                        <?= ($editing ? $editing['status'] : 'sealed') === $val ? 'selected' : '' ?>>
-                                        <?= $label ?>
-                                    </option>
-                                <?php endforeach; ?>
+                            <label class="form-label text-secondary">Embalagem</label>
+                            <select name="condition" class="form-select bg-dark text-light border-secondary">
+                                <option value="sealed" <?= ($editing ? $editing['condition'] : 'sealed') === 'sealed' ? 'selected' : '' ?>>Lacrada</option>
+                                <option value="open"   <?= ($editing ? $editing['condition'] : 'sealed') === 'open'   ? 'selected' : '' ?>>Aberta</option>
+                                <option value="no_box" <?= ($editing ? $editing['condition'] : 'sealed') === 'no_box' ? 'selected' : '' ?>>Sem caixa</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label text-secondary">Localização</label>
+                            <select name="location" class="form-select bg-dark text-light border-secondary">
+                                <option value="storage" <?= ($editing ? $editing['location'] : 'storage') === 'storage' ? 'selected' : '' ?>>Em armazenamento</option>
+                                <option value="display" <?= ($editing ? $editing['location'] : 'storage') === 'display' ? 'selected' : '' ?>>Em exposição</option>
                             </select>
                         </div>
                         <div class="col-12">
@@ -753,6 +826,23 @@ require_once __DIR__ . '/../includes/header_admin.php';
                                     Visível no site público
                                 </label>
                             </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check form-switch mt-1">
+                                <input class="form-check-input" type="checkbox" name="is_featured" id="is_featured" value="1"
+                                       <?= ($editing && $editing['is_featured']) ? 'checked' : '' ?>>
+                                <label class="form-check-label text-secondary" for="is_featured">
+                                    <i class="fa fa-star text-warning me-1"></i>Destacar (aparece primeiro)
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label text-secondary">Ordem de exibição</label>
+                            <input type="number" name="sort_order" min="0"
+                                   class="form-control bg-dark text-light border-secondary"
+                                   value="<?= $editing ? (int)($editing['sort_order'] ?? 9999) : 9999 ?>"
+                                   title="Número menor aparece antes (0 = padrão)">
+                            <small class="text-secondary">Menor número = aparece antes</small>
                         </div>
                     </div>
                 </div>

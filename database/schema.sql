@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS miniatures (
     scale VARCHAR(20) DEFAULT NULL,
     year SMALLINT UNSIGNED DEFAULT NULL,
     category_id INT UNSIGNED DEFAULT NULL,
-    status ENUM('open', 'sealed', 'display', 'storage') NOT NULL DEFAULT 'sealed',
+    condition ENUM('sealed', 'open', 'no_box') NOT NULL DEFAULT 'sealed',
+    location ENUM('display', 'storage') NOT NULL DEFAULT 'storage',
     public_description TEXT DEFAULT NULL,
     private_story TEXT DEFAULT NULL,
     private_notes TEXT DEFAULT NULL,
@@ -35,6 +36,8 @@ CREATE TABLE IF NOT EXISTS miniatures (
         emotional_rating BETWEEN 1 AND 5
     ),
     is_public TINYINT(1) NOT NULL DEFAULT 1,
+    is_featured TINYINT(1) NOT NULL DEFAULT 0,
+    sort_order INT UNSIGNED NOT NULL DEFAULT 9999,
     views INT UNSIGNED NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

@@ -109,7 +109,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
     $indexes = [
         'idx_photos_miniature_primary' => ['miniature_photos', 'CREATE INDEX idx_photos_miniature_primary ON miniature_photos (miniature_id, is_primary)'],
         'idx_miniatures_created'       => ['miniatures',       'CREATE INDEX idx_miniatures_created ON miniatures (created_at)'],
-        'idx_miniatures_status'        => ['miniatures',       'CREATE INDEX idx_miniatures_status ON miniatures (status)'],
+        'idx_miniatures_condition'     => ['miniatures',       'CREATE INDEX idx_miniatures_condition ON miniatures (`condition`)'],
+        'idx_miniatures_location'      => ['miniatures',       'CREATE INDEX idx_miniatures_location ON miniatures (location)'],
         'idx_miniatures_manufacturer'  => ['miniatures',       'CREATE INDEX idx_miniatures_manufacturer ON miniatures (manufacturer)'],
         'idx_miniatures_scale'         => ['miniatures',       'CREATE INDEX idx_miniatures_scale ON miniatures (scale)'],
         'ft_miniatures_search'         => ['miniatures',       'ALTER TABLE miniatures ADD FULLTEXT INDEX ft_miniatures_search (name, manufacturer, model)'],
@@ -117,8 +118,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
 
     // Schema migrations (column additions) — checked via information_schema.columns
     $columns = [
-        'is_public' => "ALTER TABLE miniatures ADD COLUMN is_public TINYINT(1) NOT NULL DEFAULT 1 AFTER emotional_rating",
-        'views'     => "ALTER TABLE miniatures ADD COLUMN views INT UNSIGNED NOT NULL DEFAULT 0 AFTER is_public",
+        'is_public'   => "ALTER TABLE miniatures ADD COLUMN is_public TINYINT(1) NOT NULL DEFAULT 1 AFTER emotional_rating",
+        'views'       => "ALTER TABLE miniatures ADD COLUMN views INT UNSIGNED NOT NULL DEFAULT 0 AFTER is_public",
+        'is_featured' => "ALTER TABLE miniatures ADD COLUMN is_featured TINYINT(1) NOT NULL DEFAULT 0 AFTER is_public",
+        'sort_order'  => "ALTER TABLE miniatures ADD COLUMN sort_order INT UNSIGNED NOT NULL DEFAULT 9999 AFTER is_featured",
+        'condition'   => "ALTER TABLE miniatures ADD COLUMN `condition` ENUM('sealed','open','no_box') NOT NULL DEFAULT 'sealed' AFTER category_id",
+        'location'    => "ALTER TABLE miniatures ADD COLUMN location ENUM('display','storage') NOT NULL DEFAULT 'storage' AFTER `condition`",
     ];
 
     // Table migrations — checked via information_schema.tables
@@ -151,6 +156,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
     $applied = [];
     $errors  = [];
     $skipped = [];
+
+    // ENUM expansions — always run MODIFY to ensure the ENUM includes all values
+    $enum_mods = [
+        'condition_no_box' => "ALTER TABLE miniatures MODIFY COLUMN `condition` ENUM('sealed','open','no_box') NOT NULL DEFAULT 'sealed'",
+    ];
+    $check_col_type = db()->prepare(
+        "SELECT COLUMN_TYPE FROM information_schema.columns
+         WHERE table_schema = DATABASE() AND table_name = 'miniatures' AND column_name = ?"
+    );
+    foreach ($enum_mods as $key => $sql) {
+        try {
+            $check_col_type->execute(['condition']);
+            $col_type = $check_col_type->fetchColumn();
+            if ($col_type && str_contains((string)$col_type, 'no_box')) {
+                $skipped[] = 'enum:' . $key;
+                continue;
+            }
+            if (!$col_type) { $skipped[] = 'enum:' . $key . ' (col missing)'; continue; }
+            db()->exec($sql);
+            $applied[] = 'enum:' . $key;
+        } catch (Throwable $e) {
+            $errors[] = 'enum:' . $key . ': ' . $e->getMessage();
+        }
+    }
 
     $check = db()->prepare(
         "SELECT COUNT(*) FROM information_schema.statistics
@@ -187,6 +216,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
         } catch (Throwable $e) {
             $errors[] = $name . ': ' . $e->getMessage();
         }
+    }
+
+    // Data migration: status → condition + location, then drop status column
+    $chk_status = db()->prepare(
+        "SELECT COUNT(*) FROM information_schema.columns
+         WHERE table_schema = DATABASE() AND table_name = 'miniatures' AND column_name = 'status'"
+    );
+    $chk_cond = db()->prepare(
+        "SELECT COUNT(*) FROM information_schema.columns
+         WHERE table_schema = DATABASE() AND table_name = 'miniatures' AND column_name = 'condition'"
+    );
+    $chk_status->execute(); $has_status = (int) $chk_status->fetchColumn();
+    $chk_cond->execute();   $has_cond   = (int) $chk_cond->fetchColumn();
+
+    if ($has_status && $has_cond) {
+        try {
+            db()->exec("UPDATE miniatures SET `condition` = IF(status = 'open', 'open', 'sealed'), location = 'storage'");
+            $applied[] = 'data:status→condition+location';
+        } catch (Throwable $e) {
+            $errors[] = 'data:migrate_status: ' . $e->getMessage();
+        }
+        try {
+            db()->exec("ALTER TABLE miniatures DROP COLUMN status");
+            $applied[] = 'drop:status';
+        } catch (Throwable $e) {
+            $errors[] = 'drop:status: ' . $e->getMessage();
+        }
+    } elseif (!$has_status) {
+        $skipped[] = 'data:migrate_status (status column already removed)';
+    } else {
+        $skipped[] = 'data:migrate_status (condition column not ready yet)';
     }
 
     echo json_encode(['applied' => $applied, 'skipped' => $skipped, 'errors' => $errors]);

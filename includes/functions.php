@@ -106,9 +106,13 @@ function _miniatures_where(array $filters, bool $fulltext = true): array {
         $where[] = 'm.category_id = ?';
         $params[] = $filters['category_id'];
     }
-    if (!empty($filters['status'])) {
-        $where[] = 'm.status = ?';
-        $params[] = $filters['status'];
+    if (!empty($filters['condition'])) {
+        $where[] = 'm.`condition` = ?';
+        $params[] = $filters['condition'];
+    }
+    if (!empty($filters['location'])) {
+        $where[] = 'm.location = ?';
+        $params[] = $filters['location'];
     }
     if (!empty($filters['search'])) {
         $term = $filters['search'];
@@ -171,7 +175,7 @@ function get_miniatures(array $filters = []): array {
         'manufacturer' => 'm.manufacturer ASC, m.name ASC',
         'year_asc'     => 'm.year ASC, m.name ASC',
         'year_desc'    => 'm.year DESC, m.name ASC',
-        default        => 'm.created_at DESC',
+        default        => 'm.is_featured DESC, m.sort_order ASC, m.created_at DESC',
     };
 
     foreach ($use_ft ? [true, false] : [false] as $ft) {
@@ -286,8 +290,12 @@ function get_stats(): array {
          GROUP BY c.name ORDER BY total DESC"
     )->fetchAll();
 
-    $by_status = db()->query(
-        "SELECT status, COUNT(*) AS total FROM miniatures GROUP BY status"
+    $by_condition = db()->query(
+        "SELECT `condition`, COUNT(*) AS total FROM miniatures GROUP BY `condition`"
+    )->fetchAll();
+
+    $by_location = db()->query(
+        "SELECT location, COUNT(*) AS total FROM miniatures GROUP BY location"
     )->fetchAll();
 
     $financial = db()->query(
@@ -316,7 +324,7 @@ function get_stats(): array {
         $top_viewed = [];
     }
 
-    return compact('total', 'by_scale', 'by_manufacturer', 'by_category', 'by_status', 'financial', 'top_viewed');
+    return compact('total', 'by_scale', 'by_manufacturer', 'by_category', 'by_condition', 'by_location', 'financial', 'top_viewed');
 }
 
 function get_adjacent_miniatures(int $id): array {
@@ -437,27 +445,47 @@ function delete_photo(int $photo_id, int $miniature_id): void {
     db()->prepare('DELETE FROM miniature_photos WHERE id = ?')->execute([$photo_id]);
 }
 
-// ─── Status labels ───────────────────────────────────────────────────────────
+// ─── Condition / Location labels & badges ───────────────────────────────────
 
-function status_label(string $status): string {
-    return match ($status) {
-        'open'    => 'Aberta',
-        'sealed'  => 'Lacrada',
-        'display' => 'Em exposição',
-        'storage' => 'Em armazenamento',
-        default   => ucfirst($status),
+function condition_label(string $c): string {
+    return match ($c) {
+        'sealed' => 'Lacrada',
+        'open'   => 'Aberta',
+        'no_box' => 'Sem caixa',
+        default  => ucfirst($c),
     };
 }
 
-function status_badge(string $status): string {
-    $class = match ($status) {
-        'open'    => 'success',
-        'sealed'  => 'primary',
+function condition_badge(string $c): string {
+    $class = match ($c) {
+        'sealed' => 'primary',
+        'open'   => 'success',
+        'no_box' => 'warning',
+        default  => 'secondary',
+    };
+    return '<span class="badge bg-' . $class . '">' . h(condition_label($c)) . '</span>';
+}
+
+function location_label(string $l): string {
+    return match ($l) {
+        'display' => 'Em exposição',
+        'storage' => 'Em armazenamento',
+        default   => ucfirst($l),
+    };
+}
+
+function location_badge(string $l): string {
+    $class = match ($l) {
         'display' => 'info',
         'storage' => 'secondary',
-        default   => 'light',
+        default   => 'secondary',
     };
-    return '<span class="badge bg-' . $class . '">' . h(status_label($status)) . '</span>';
+    return '<span class="badge bg-' . $class . '">' . h(location_label($l)) . '</span>';
+}
+
+/** Renders both condition and location badges for a miniature row. */
+function mini_status_badges(array $mini): string {
+    return condition_badge($mini['condition'] ?? 'sealed') . ' ' . location_badge($mini['location'] ?? 'storage');
 }
 
 function wishlist_status_label(string $status): string {

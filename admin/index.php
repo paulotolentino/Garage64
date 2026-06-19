@@ -31,12 +31,22 @@ require_once __DIR__ . '/../includes/header_admin.php';
             </div>
         </div>
     </div>
-    <?php foreach ($stats['by_status'] as $s): ?>
+    <?php foreach ($stats['by_condition'] as $s): ?>
     <div class="col-6 col-sm-4 col-xl-2">
         <div class="card bg-dark border-secondary h-100">
             <div class="card-body text-center py-3 text-light">
                 <div class="h3 mb-0 text-warning"><?= $s['total'] ?></div>
-                <div class="text-secondary small"><?= h(status_label($s['status'])) ?></div>
+                <div class="text-secondary small"><?= h(condition_label($s['condition'])) ?></div>
+            </div>
+        </div>
+    </div>
+    <?php endforeach; ?>
+    <?php foreach ($stats['by_location'] as $s): ?>
+    <div class="col-6 col-sm-4 col-xl-2">
+        <div class="card bg-dark border-secondary h-100">
+            <div class="card-body text-center py-3 text-light">
+                <div class="h3 mb-0 text-warning"><?= $s['total'] ?></div>
+                <div class="text-secondary small"><?= h(location_label($s['location'])) ?></div>
             </div>
         </div>
     </div>
@@ -172,6 +182,40 @@ $app_pct       = ($both_paid && $appreciation !== null) ? ($appreciation / $both
     </div>
 </div>
 
+<div class="row g-4 mt-0">
+    <!-- By Condition — doughnut -->
+    <div class="col-12 col-lg-6">
+        <div class="card bg-dark border-secondary h-100">
+            <div class="card-header border-secondary text-light">
+                <i class="fa fa-box me-1 text-warning"></i>Por Embalagem
+            </div>
+            <div class="card-body d-flex align-items-center justify-content-center" style="min-height:200px;">
+                <?php if (!empty($stats['by_condition'])): ?>
+                    <canvas id="chartCondition" style="max-height:200px;"></canvas>
+                <?php else: ?>
+                    <span class="text-secondary">Sem dados</span>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <!-- By Location — doughnut -->
+    <div class="col-12 col-lg-6">
+        <div class="card bg-dark border-secondary h-100">
+            <div class="card-header border-secondary text-light">
+                <i class="fa fa-map-pin me-1 text-warning"></i>Por Localização
+            </div>
+            <div class="card-body d-flex align-items-center justify-content-center" style="min-height:200px;">
+                <?php if (!empty($stats['by_location'])): ?>
+                    <canvas id="chartLocation" style="max-height:200px;"></canvas>
+                <?php else: ?>
+                    <span class="text-secondary">Sem dados</span>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row mt-4">
     <div class="col">
         <a href="/admin/miniatures?action=add" class="btn btn-warning">
@@ -247,6 +291,41 @@ new Chart(document.getElementById('chartCategory'), {
     data: {
         labels: <?= json_encode(array_map(fn($r) => $r['name'] ?? 'Sem categoria', $stats['by_category'])) ?>,
         datasets: [{ data: <?= json_encode(array_column($stats['by_category'], 'total')) ?>, backgroundColor: PALETTE, borderWidth: 2, borderColor: '#12141c' }]
+    },
+    options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10 } } }, cutout: '60%' }
+});
+<?php endif; ?>
+
+<?php if (!empty($stats['by_condition'])): ?>
+new Chart(document.getElementById('chartCondition'), {
+    type: 'doughnut',
+    data: {
+        labels: <?= json_encode(array_map(fn($r) => condition_label($r['condition']), $stats['by_condition'])) ?>,
+        datasets: [{ data: <?= json_encode(array_column($stats['by_condition'], 'total')) ?>,
+            backgroundColor: <?= json_encode(array_map(fn($r) => match($r['condition']) {
+                'sealed' => '#0d6efd',
+                'open'   => '#198754',
+                'no_box' => '#ffc107',
+                default  => '#6c757d',
+            }, $stats['by_condition'])) ?>,
+            borderWidth: 2, borderColor: '#12141c' }]
+    },
+    options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10 } } }, cutout: '60%' }
+});
+<?php endif; ?>
+
+<?php if (!empty($stats['by_location'])): ?>
+new Chart(document.getElementById('chartLocation'), {
+    type: 'doughnut',
+    data: {
+        labels: <?= json_encode(array_map(fn($r) => location_label($r['location']), $stats['by_location'])) ?>,
+        datasets: [{ data: <?= json_encode(array_column($stats['by_location'], 'total')) ?>,
+            backgroundColor: <?= json_encode(array_map(fn($r) => match($r['location']) {
+                'display' => '#0dcaf0',
+                'storage' => '#6c757d',
+                default   => '#adb5bd',
+            }, $stats['by_location'])) ?>,
+            borderWidth: 2, borderColor: '#12141c' }]
     },
     options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10 } } }, cutout: '60%' }
 });

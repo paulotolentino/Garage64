@@ -121,7 +121,7 @@ require_once __DIR__ . '/includes/header_public.php';
             <span class="text-warning fw-bold text-uppercase" style="letter-spacing:.06em; font-size:.8rem;">
                 <?= e($miniature['manufacturer']) ?>
             </span>
-            <?= status_badge($miniature['status']) ?>
+            <?= mini_status_badges($miniature) ?>
         </div>
 
         <!-- Title -->

@@ -69,7 +69,7 @@ foreach ($miniatures as $m) {
         $m['scale'] ?? '',
         $m['year'] ?? '',
         $m['category_name'] ?? '',
-        status_label($m['status']),
+        condition_label($m['condition'] ?? 'sealed') . ' / ' . location_label($m['location'] ?? 'storage'),
         $m['purchase_price'] !== null ? number_format((float) $m['purchase_price'], 2, ',', '.') : '',
         $m['estimated_price'] !== null ? number_format((float) $m['estimated_price'], 2, ',', '.') : '',
         $m['purchase_date'] ?? '',

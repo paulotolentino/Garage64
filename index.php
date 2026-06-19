@@ -7,7 +7,8 @@ $filters = [
     'manufacturer' => trim($_GET['manufacturer'] ?? ''),
     'scale'        => trim($_GET['scale'] ?? ''),
     'category_id'  => (int) ($_GET['category_id'] ?? 0) ?: null,
-    'status'       => trim($_GET['status'] ?? ''),
+    'condition'    => trim($_GET['condition'] ?? ''),
+    'location'     => trim($_GET['location'] ?? ''),
     'search'       => trim($_GET['search'] ?? ''),
     'tag_id'       => (int) ($_GET['tag_id'] ?? 0) ?: null,
     'sort'         => in_array($_GET['sort'] ?? '', ['name','manufacturer','year_asc','year_desc']) ? $_GET['sort'] : '',
@@ -73,12 +74,18 @@ require_once __DIR__ . '/includes/header_public.php';
                 </select>
             </div>
             <div class="col-6 col-md-1">
-                <select name="status" class="form-select form-select-sm bg-dark text-light border-secondary">
-                    <option value="">Status</option>
-                    <option value="open" <?= $filters['status'] === 'open' ? 'selected' : '' ?>>Aberta</option>
-                    <option value="sealed" <?= $filters['status'] === 'sealed' ? 'selected' : '' ?>>Lacrada</option>
-                    <option value="display" <?= $filters['status'] === 'display' ? 'selected' : '' ?>>Exposição</option>
-                    <option value="storage" <?= $filters['status'] === 'storage' ? 'selected' : '' ?>>Armazenada</option>
+                <select name="condition" class="form-select form-select-sm bg-dark text-light border-secondary">
+                    <option value="">Embalagem</option>
+                    <option value="sealed" <?= ($filters['condition'] ?? '') === 'sealed' ? 'selected' : '' ?>>Lacrada</option>
+                    <option value="open"   <?= ($filters['condition'] ?? '') === 'open'   ? 'selected' : '' ?>>Aberta</option>
+                    <option value="no_box" <?= ($filters['condition'] ?? '') === 'no_box' ? 'selected' : '' ?>>Sem caixa</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-1">
+                <select name="location" class="form-select form-select-sm bg-dark text-light border-secondary">
+                    <option value="">Local</option>
+                    <option value="storage" <?= ($filters['location'] ?? '') === 'storage' ? 'selected' : '' ?>>Armazenada</option>
+                    <option value="display" <?= ($filters['location'] ?? '') === 'display' ? 'selected' : '' ?>>Exposição</option>
                 </select>
             </div>
             <div class="col-6 col-md-2">
@@ -98,7 +105,7 @@ require_once __DIR__ . '/includes/header_public.php';
         <?php if (!empty($tags)):
             // Build base QS preserving all active filters except tag_id and page
             $tag_qs_base = [];
-            foreach (['manufacturer','scale','category_id','status','search','sort'] as $k) {
+            foreach (['manufacturer','scale','category_id','condition','location','search','sort'] as $k) {
                 if (!empty($filters[$k])) $tag_qs_base[$k] = $filters[$k];
             }
             $tag_qs_str    = $tag_qs_base ? '?' . http_build_query($tag_qs_base) . '&' : '?';
@@ -120,7 +127,7 @@ require_once __DIR__ . '/includes/header_public.php';
 <!-- Grid -->
 <?php
 $has_active_filters = array_filter(array_intersect_key(
-    $filters, array_flip(['manufacturer','scale','category_id','status','search','tag_id'])
+    $filters, array_flip(['manufacturer','scale','category_id','condition','location','search','tag_id'])
 ));
 ?>
 <?php if (empty($miniatures)): ?>
@@ -160,7 +167,7 @@ $has_active_filters = array_filter(array_intersect_key(
                             <?php if ($mini['scale']): ?>
                                 <div class="text-secondary" style="font-size:.75rem"><?= e($mini['scale']) ?></div>
                             <?php endif; ?>
-                            <div class="mt-1"><?= status_badge($mini['status']) ?></div>
+                            <div class="mt-1"><?= mini_status_badges($mini) ?></div>
                         </div>
                     </div>
                 </a>
@@ -171,7 +178,7 @@ $has_active_filters = array_filter(array_intersect_key(
 
 <?php if ($total_pages > 1):
     $qs_parts = [];
-    foreach (['manufacturer','scale','category_id','status','search','tag_id','sort'] as $k) {
+    foreach (['manufacturer','scale','category_id','condition','location','search','tag_id','sort'] as $k) {
         if (!empty($filters[$k])) $qs_parts[$k] = $filters[$k];
     }
     $qs_base = $qs_parts ? '&' . http_build_query($qs_parts) : '';
