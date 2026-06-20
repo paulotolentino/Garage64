@@ -14,166 +14,254 @@ try {
     $lp_minis      = 0;
 }
 
+// Recém-adicionadas pela comunidade (públicas, mais recentes primeiro).
+try {
+    $stmt = db()->prepare(
+        "SELECT m.id, m.name, m.manufacturer, m.scale,
+                p.file_path AS primary_photo,
+                u.slug AS owner_slug, u.display_name AS owner_name
+         FROM miniatures m
+         LEFT JOIN miniature_photos p ON p.miniature_id = m.id AND p.is_primary = 1
+         LEFT JOIN admin_users u ON u.id = m.user_id
+         WHERE m.is_public = 1
+         ORDER BY m.created_at DESC
+         LIMIT 12"
+    );
+    $stmt->execute();
+    $lp_recent = $stmt->fetchAll();
+} catch (\Throwable $e) {
+    $lp_recent = [];
+}
+// Vitrine do hero: somente as recém-adicionadas que realmente têm foto.
+$lp_showcase = array_values(array_filter($lp_recent, fn($m) => !empty($m['primary_photo'])));
+// IDs das que serão exibidas no painel do hero (até 4), para não repetir abaixo.
+$lp_showcase_ids = array_map(fn($m) => (int) $m['id'], array_slice($lp_showcase, 0, 4));
+// "Últimas miniaturas" exibe apenas o que NÃO está no painel do hero.
+$lp_recent_rest = array_values(array_filter($lp_recent, fn($m) => !in_array((int) $m['id'], $lp_showcase_ids, true)));
+
 $body_class = 'lp-page';
 require_once __DIR__ . '/includes/header_public.php';
 ?>
 
-<!-- ── Hero ─────────────────────────────────────────────────────────── -->
+<!-- ── Hero (2 colunas) ─────────────────────────────────────────────── -->
 <section class="lp-hero">
     <div class="lp-hero-glow"></div>
     <div class="lp-hero-grid"></div>
-    <p class="lp-eyebrow">Para colecionadores de diecast</p>
-    <h1 class="lp-hero-title mb-3">
-        Catalogue, organize<br>
-        e <span>compartilhe</span><br>
-        sua coleção.
-    </h1>
-    <p class="lp-hero-sub mb-5">
-        Registre cada miniatura, controle valores, destaque as favoritas<br class="d-none d-md-inline">
-        e tenha uma página pública pronta para compartilhar.
-    </p>
-    <div class="d-flex gap-3 flex-wrap justify-content-center">
-        <a href="/register" class="btn btn-warning btn-lg px-5 fw-semibold">
-            Começar grátis <i class="fa fa-arrow-right ms-2"></i>
-        </a>
-        <a href="/collections" class="btn lp-btn-ghost btn-lg px-4">
-            Ver coleções
-        </a>
-    </div>
-    <p class="mt-4 mb-0" style="font-size:.875rem;color:#6b7585;">
-        Já tem uma conta? <a href="/admin/login" class="text-warning text-decoration-none fw-semibold">Entrar</a>
-    </p>
-</section>
+    <div class="lp-hero-inner">
+        <!-- Esquerda: mensagem -->
+        <div class="lp-hero-copy">
+            <p class="lp-eyebrow">A garagem digital do colecionador</p>
+            <h1 class="lp-hero-title mb-3">
+                Sua garagem de<br>
+                miniaturas <span>na internet</span>.
+            </h1>
+            <p class="lp-hero-sub mb-4">
+                Catalogue cada peça, organize a coleção inteira e mostre suas joias diecast numa vitrine pública feita pra colecionador.
+            </p>
+            <div class="d-flex gap-3 flex-wrap justify-content-center justify-content-lg-start">
+                <a href="/register" class="btn btn-warning btn-lg px-5 fw-semibold">
+                    Montar minha garagem <i class="fa fa-arrow-right ms-2"></i>
+                </a>
+                <a href="/collections" class="btn lp-btn-ghost btn-lg px-4">
+                    Explorar coleções
+                </a>
+            </div>
+            <p class="mt-4 mb-0 lp-hero-signin">
+                Já tem garagem? <a href="/admin/login" class="text-warning text-decoration-none fw-semibold">Entrar</a>
+            </p>
+        </div>
 
-<!-- ── Stats ─────────────────────────────────────────────────────────── -->
-<?php if ($lp_collectors >= 1 || $lp_minis > 0): ?>
-<div class="lp-stats-bar">
-    <div class="d-flex justify-content-center align-items-center gap-0 flex-wrap">
-        <?php if ($lp_collectors > 0): ?>
-        <div class="lp-stat-item">
-            <div class="lp-stat-number" data-count="<?= $lp_collectors ?>"><?= number_format($lp_collectors) ?></div>
-            <div class="lp-stat-label">colecionador<?= $lp_collectors !== 1 ? 'es' : '' ?></div>
-        </div>
-        <div class="lp-stat-divider"></div>
-        <?php endif; ?>
-        <?php if ($lp_minis > 0): ?>
-        <div class="lp-stat-item">
-            <div class="lp-stat-number" data-count="<?= $lp_minis ?>"><?= number_format($lp_minis) ?></div>
-            <div class="lp-stat-label">miniatura<?= $lp_minis !== 1 ? 's' : '' ?> catalogada<?= $lp_minis !== 1 ? 's' : '' ?></div>
-        </div>
-        <div class="lp-stat-divider"></div>
-        <?php endif; ?>
-        <div class="lp-stat-item">
-            <div class="lp-stat-number" style="font-size:1.5rem;">100% grátis</div>
-            <div class="lp-stat-label">para sempre</div>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
+        <!-- Direita: painel "Garagem em destaque" -->
+        <div class="lp-garage-panel">
+            <div class="lp-garage-panel-head">
+                <span class="lp-garage-label">Garagem em destaque</span>
+                <span class="lp-garage-live"><span class="lp-garage-dot"></span>ao vivo</span>
+            </div>
 
-<!-- ── Features ──────────────────────────────────────────────────────── -->
-<section class="py-5 my-2">
-    <div class="text-center mb-5 lp-animate">
-        <p class="lp-eyebrow">Funcionalidades</p>
-        <h2 class="lp-section-title">Tudo que um colecionador precisa</h2>
-        <p class="text-secondary mt-2 mx-auto" style="max-width:460px;">Uma ferramenta simples e completa para documentar sua paixão por diecast.</p>
-    </div>
-    <div class="row g-4">
-        <div class="col-12 col-sm-6 col-md-4 lp-animate" style="--lp-delay:0s">
-            <div class="lp-feature-card">
-                <div class="lp-feature-icon"><i class="fa fa-database"></i></div>
-                <h5 class="text-light fw-semibold mb-2">Catálogo completo</h5>
-                <p class="text-secondary small mb-0">Fabricante, escala, ano, condição, embalagem, valor pago, estimado e notas privadas.</p>
+            <div class="lp-garage-bigstat">
+                <?php if ($lp_minis > 0): ?>
+                    <span class="lp-garage-stat-big"><?= number_format($lp_minis) ?></span>
+                    <span class="lp-garage-stat-cap">miniatura<?= $lp_minis !== 1 ? 's' : '' ?> estacionada<?= $lp_minis !== 1 ? 's' : '' ?></span>
+                <?php else: ?>
+                    <span class="lp-garage-stat-big">Sua coleção</span>
+                    <span class="lp-garage-stat-cap">começa aqui</span>
+                <?php endif; ?>
             </div>
-        </div>
-        <div class="col-12 col-sm-6 col-md-4 lp-animate" style="--lp-delay:0.08s">
-            <div class="lp-feature-card">
-                <div class="lp-feature-icon"><i class="fa fa-images"></i></div>
-                <h5 class="text-light fw-semibold mb-2">Galeria de fotos</h5>
-                <p class="text-secondary small mb-0">Múltiplas fotos por peça com geração automática de thumbnails otimizados em WebP.</p>
-            </div>
-        </div>
-        <div class="col-12 col-sm-6 col-md-4 lp-animate" style="--lp-delay:0.16s">
-            <div class="lp-feature-card">
-                <div class="lp-feature-icon"><i class="fa fa-globe"></i></div>
-                <h5 class="text-light fw-semibold mb-2">Página pública</h5>
-                <p class="text-secondary small mb-0">Link pessoal com filtros, busca por nome e visualização em grade ou lista.</p>
-            </div>
-        </div>
-        <div class="col-12 col-sm-6 col-md-4 lp-animate" style="--lp-delay:0.24s">
-            <div class="lp-feature-card">
-                <div class="lp-feature-icon"><i class="fa fa-star"></i></div>
-                <h5 class="text-light fw-semibold mb-2">Destaques</h5>
-                <p class="text-secondary small mb-0">Marque as peças favoritas para que apareçam sempre no topo da sua coleção.</p>
-            </div>
-        </div>
-        <div class="col-12 col-sm-6 col-md-4 lp-animate" style="--lp-delay:0.32s">
-            <div class="lp-feature-card">
-                <div class="lp-feature-icon"><i class="fa fa-heart"></i></div>
-                <h5 class="text-light fw-semibold mb-2">Wishlist</h5>
-                <p class="text-secondary small mb-0">Gerencie as peças que deseja adquirir e converta para a coleção com um clique.</p>
-            </div>
-        </div>
-        <div class="col-12 col-sm-6 col-md-4 lp-animate" style="--lp-delay:0.40s">
-            <div class="lp-feature-card">
-                <div class="lp-feature-icon"><i class="fa fa-chart-line"></i></div>
-                <h5 class="text-light fw-semibold mb-2">Estatísticas</h5>
-                <p class="text-secondary small mb-0">Dashboard com valorização, distribuição por fabricante, escala, condição e localização.</p>
-            </div>
-        </div>
-    </div>
-</section>
 
-<!-- ── Featured Collections ──────────────────────────────────────────── -->
-<?php if (!empty($collections)): ?>
-<section class="py-4 mb-3">
-    <div class="d-flex align-items-end mb-4 gap-3">
-        <div>
-            <p class="lp-eyebrow mb-1">Comunidade</p>
-            <h2 class="lp-section-title mb-0">Coleções em destaque</h2>
-        </div>
-        <a href="/collections" class="ms-auto text-secondary small text-decoration-none lp-link-arrow">
-            Ver todas <i class="fa fa-arrow-right ms-1 fa-xs"></i>
-        </a>
-    </div>
-    <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 g-3">
-        <?php $lp_ci = 0; foreach ($collections as $col): ?>
-        <div class="col lp-animate" style="--lp-delay:<?= number_format($lp_ci++ * 0.07, 2) ?>s">
-            <a href="/u/<?= e($col['slug']) ?>" class="text-decoration-none">
-                <div class="lp-collection-card">
-                    <?php if (!empty($col['avatar'])): ?>
-                        <img src="<?= e(avatar_url($col['avatar'])) ?>"
-                             alt="<?= e($col['display_name'] ?: $col['slug']) ?>"
-                             class="rounded-circle mx-auto d-block mb-3"
-                             style="width:64px;height:64px;object-fit:cover;border:2px solid var(--g64-border);">
-                    <?php else: ?>
-                        <div class="rounded-circle bg-warning d-flex align-items-center justify-content-center mx-auto mb-3 fw-bold text-dark"
-                             style="width:64px;height:64px;font-size:1.6rem;flex-shrink:0;">
-                            <?= mb_strtoupper(mb_substr($col['display_name'] ?: $col['slug'], 0, 1)) ?>
-                        </div>
-                    <?php endif; ?>
-                    <div class="text-light fw-semibold"><?= e($col['display_name'] ?: $col['slug']) ?></div>
-                    <div class="text-secondary small mt-1">@<?= e($col['slug']) ?></div>
-                    <div class="mt-2">
-                        <span class="badge rounded-pill" style="background:rgba(240,165,0,0.12);color:var(--g64-yellow);font-size:.7rem;">
-                            <?= (int)$col['mini_count'] ?> peça<?= $col['mini_count'] != 1 ? 's' : '' ?>
-                        </span>
-                    </div>
+            <?php $lp_panel = array_slice($lp_showcase, 0, 4); ?>
+            <div class="lp-garage-grid">
+                <?php foreach ($lp_panel as $sc): ?>
+                <a href="<?= e(mini_url($sc)) ?>" class="lp-garage-tile">
+                    <img src="<?= e(thumb_url($sc['primary_photo'])) ?>"
+                         data-fallback="<?= e(photo_url($sc['primary_photo'])) ?>"
+                         alt="<?= e($sc['name']) ?>" loading="lazy">
+                    <span class="lp-garage-tile-name"><?= e($sc['name']) ?></span>
+                </a>
+                <?php endforeach; ?>
+                <?php for ($i = count($lp_panel); $i < 4; $i++): ?>
+                <div class="lp-garage-tile lp-garage-tile-empty"><i class="fa fa-car-side"></i></div>
+                <?php endfor; ?>
+            </div>
+
+            <div class="lp-garage-foot">
+                <?php if ($lp_collectors > 0): ?>
+                <div class="lp-garage-foot-item">
+                    <span class="lp-garage-foot-num"><?= number_format($lp_collectors) ?></span>
+                    <span class="lp-garage-foot-lbl">colecionador<?= $lp_collectors !== 1 ? 'es' : '' ?></span>
                 </div>
-            </a>
+                <?php endif; ?>
+                <div class="lp-garage-foot-item">
+                    <span class="lp-garage-foot-num">100%</span>
+                    <span class="lp-garage-foot-lbl">grátis</span>
+                </div>
+                <div class="lp-garage-foot-item">
+                    <span class="lp-garage-foot-num"><i class="fa fa-bolt"></i></span>
+                    <span class="lp-garage-foot-lbl">em minutos</span>
+                </div>
+            </div>
         </div>
-        <?php endforeach; ?>
+    </div>
+</section>
+
+<!-- ── Explore garagens reais (coleções + últimas miniaturas) ───────── -->
+<?php
+$lp_latest    = array_slice($lp_recent_rest, 0, 6);
+$lp_has_explore = !empty($collections) || !empty($lp_latest);
+?>
+<?php if ($lp_has_explore): ?>
+<section class="py-4">
+    <div class="text-center text-lg-start mb-4">
+        <p class="lp-eyebrow mb-1">Comunidade</p>
+        <h2 class="lp-section-title mb-0">Explore garagens reais</h2>
+    </div>
+    <div class="lp-explore">
+        <!-- Garagens -->
+        <div class="lp-explore-side">
+            <div class="lp-explore-subhead">
+                <span>Garagens</span>
+                <a href="/collections" class="lp-link-arrow text-decoration-none">Ver todas <i class="fa fa-arrow-right fa-xs ms-1"></i></a>
+            </div>
+            <?php if (!empty($collections)): ?>
+                <?php foreach (array_slice($collections, 0, 4) as $col): ?>
+                <a href="/u/<?= e($col['slug']) ?>" class="lp-garage-card">
+                    <?php if (!empty($col['avatar'])): ?>
+                        <img src="<?= e(avatar_url($col['avatar'])) ?>" alt="<?= e($col['display_name'] ?: $col['slug']) ?>" class="lp-garage-card-avatar">
+                    <?php else: ?>
+                        <span class="lp-garage-card-avatar lp-garage-card-initial"><?= mb_strtoupper(mb_substr($col['display_name'] ?: $col['slug'], 0, 1)) ?></span>
+                    <?php endif; ?>
+                    <span class="lp-garage-card-body">
+                        <span class="lp-garage-card-name"><?= e($col['display_name'] ?: $col['slug']) ?></span>
+                        <span class="lp-garage-card-meta">@<?= e($col['slug']) ?> · <?= (int)$col['mini_count'] ?> peça<?= $col['mini_count'] != 1 ? 's' : '' ?></span>
+                    </span>
+                    <i class="fa fa-chevron-right lp-garage-card-arrow"></i>
+                </a>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <div class="lp-explore-empty">
+                    <i class="fa fa-warehouse d-block"></i>
+                    <p class="mb-2">As primeiras garagens públicas aparecem aqui.</p>
+                    <a href="/register" class="btn btn-sm btn-warning fw-semibold">Criar a sua</a>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- Últimas miniaturas -->
+        <div class="lp-explore-main">
+            <div class="lp-explore-subhead">
+                <span>Últimas miniaturas</span>
+            </div>
+            <?php if (!empty($lp_latest)): ?>
+            <div class="row row-cols-2 row-cols-md-3 g-3">
+                <?php $lp_ri = 0; foreach ($lp_latest as $rm): ?>
+                <div class="col lp-animate" style="--lp-delay:<?= number_format($lp_ri++ * 0.05, 2) ?>s">
+                    <a href="<?= e(mini_url($rm)) ?>" class="lp-recent-card">
+                        <img src="<?= e(thumb_url($rm['primary_photo'])) ?>"
+                             data-fallback="<?= e(photo_url($rm['primary_photo'])) ?>"
+                             alt="<?= e($rm['name']) ?>" class="lp-recent-thumb" loading="lazy">
+                        <div class="lp-recent-body">
+                            <?php if ($rm['manufacturer']): ?><div class="lp-recent-maker"><?= e($rm['manufacturer']) ?></div><?php endif; ?>
+                            <div class="lp-recent-name"><?= e($rm['name']) ?></div>
+                            <?php if (!empty($rm['owner_slug'])): ?>
+                            <div class="lp-recent-owner"><i class="fa fa-user fa-xs"></i>@<?= e($rm['owner_slug']) ?></div>
+                            <?php endif; ?>
+                        </div>
+                    </a>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php else: ?>
+            <div class="lp-explore-empty lp-explore-empty-tall">
+                <i class="fa fa-camera d-block"></i>
+                <p class="mb-0">As miniaturas mais recentes da comunidade aparecem aqui assim que forem publicadas.</p>
+            </div>
+            <?php endif; ?>
+        </div>
     </div>
 </section>
 <?php endif; ?>
 
-<!-- ── Bottom CTA ────────────────────────────────────────────────────── -->
+<!-- ── Por que Garage64 (band compacto) ─────────────────────────────── -->
+<section class="py-4">
+    <div class="lp-why-band lp-animate">
+        <div class="lp-why-intro">
+            <p class="lp-eyebrow mb-1">Por que Garage64</p>
+            <h2 class="lp-section-title mb-2">Feito por quem coleciona</h2>
+            <p class="text-secondary mb-0">Sem planilha bagunçada, sem rede social genérica. Um lugar só pra sua paixão por diecast.</p>
+        </div>
+        <div class="lp-why-grid">
+            <div class="lp-why-item">
+                <div class="lp-feature-icon"><i class="fa fa-warehouse"></i></div>
+                <div>
+                    <h5 class="lp-why-title">Tudo num lugar só</h5>
+                    <p class="lp-why-text">Fabricante, escala, ano, condição e valores de cada peça.</p>
+                </div>
+            </div>
+            <div class="lp-why-item">
+                <div class="lp-feature-icon"><i class="fa fa-images"></i></div>
+                <div>
+                    <h5 class="lp-why-title">Vitrine de verdade</h5>
+                    <p class="lp-why-text">Galeria de fotos por peça, em WebP, do jeito que merecem ser vistas.</p>
+                </div>
+            </div>
+            <div class="lp-why-item">
+                <div class="lp-feature-icon"><i class="fa fa-link"></i></div>
+                <div>
+                    <h5 class="lp-why-title">Sua página pública</h5>
+                    <p class="lp-why-text">Um link só seu, com busca e filtros. Compartilhe onde quiser.</p>
+                </div>
+            </div>
+            <div class="lp-why-item">
+                <div class="lp-feature-icon"><i class="fa fa-star"></i></div>
+                <div>
+                    <h5 class="lp-why-title">Destaque suas joias</h5>
+                    <p class="lp-why-text">Marque favoritas pra elas aparecerem sempre no topo.</p>
+                </div>
+            </div>
+            <div class="lp-why-item">
+                <div class="lp-feature-icon"><i class="fa fa-heart"></i></div>
+                <div>
+                    <h5 class="lp-why-title">Lista de desejos</h5>
+                    <p class="lp-why-text">Acompanhe o que falta e mova pra garagem com um clique.</p>
+                </div>
+            </div>
+            <div class="lp-why-item">
+                <div class="lp-feature-icon"><i class="fa fa-chart-line"></i></div>
+                <div>
+                    <h5 class="lp-why-title">Você no controle</h5>
+                    <p class="lp-why-text">Valorização, fabricantes, escalas e condição num painel.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ── CTA final ────────────────────────────────────────────────────── -->
 <section class="lp-cta-section lp-animate">
-    <p class="lp-eyebrow">Comece agora</p>
-    <h2 class="lp-section-title mb-3">Sua coleção merece um lugar próprio.</h2>
-    <p class="text-secondary mb-4 mx-auto" style="max-width:400px;">Crie sua conta gratuita e comece a catalogar em minutos.</p>
+    <p class="lp-eyebrow">Bora montar?</p>
+    <h2 class="lp-section-title mb-3">Sua garagem está vazia. Por enquanto.</h2>
+    <p class="text-secondary mb-4 mx-auto" style="max-width:400px;">Crie sua conta grátis e comece a estacionar suas miniaturas hoje.</p>
     <a href="/register" class="btn btn-warning btn-lg px-5 fw-semibold">
-        Criar minha coleção <i class="fa fa-arrow-right ms-2"></i>
+        Montar minha garagem <i class="fa fa-arrow-right ms-2"></i>
     </a>
 </section>
 

@@ -1,5 +1,9 @@
 /* Garage64 — app.js */
 
+// Sinaliza que o JS está ativo o quanto antes (progressive enhancement).
+// Sem esta classe, .lp-animate permanece visível por padrão.
+document.documentElement.classList.add('js-enabled');
+
 document.addEventListener('DOMContentLoaded', function () {
 
     // ── Broken image fallback (replaces is_file() server-side check) ─────────
@@ -88,6 +92,17 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
         items.forEach(function (el) { io.observe(el); });
+
+        // Falha-segura: garante que itens já visíveis na viewport ao carregar
+        // sejam revelados mesmo que o observer não dispare.
+        requestAnimationFrame(function () {
+            items.forEach(function (el) {
+                var r = el.getBoundingClientRect();
+                if (r.top < (window.innerHeight || document.documentElement.clientHeight) && r.bottom > 0) {
+                    el.classList.add('lp-visible');
+                }
+            });
+        });
     }());
 
     // ── Animated counters for stat numbers ────────────────────────────────────
