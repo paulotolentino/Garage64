@@ -13,10 +13,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
 
-    if ($username && $password && login($username, $password)) {
-        redirect('/admin/');
+    if ($username && $password) {
+        $result = login($username, $password);
+        if ($result === true) {
+            redirect('/admin/');
+        } elseif ($result === 'banned') {
+            $error = 'Sua conta foi suspensa. Entre em contato com o administrador.';
+        } else {
+            $error = 'Usuário ou senha incorretos.';
+        }
     } else {
-        $error = 'Usuário ou senha incorretos.';
+        $error = 'Preencha usuário e senha.';
     }
 }
 ?>
@@ -56,6 +63,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <i class="fa fa-sign-in-alt me-1"></i>Entrar
             </button>
         </form>
+        <hr class="border-secondary my-3">
+        <div class="text-center">
+            <a href="/register" class="text-secondary small">Criar conta</a>
+            &nbsp;&middot;&nbsp;
+            <a href="/" class="text-secondary small">Ir ao início</a>
+        </div>
     </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

@@ -141,6 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'is_public'         => isset($_POST['is_public']) ? 1 : 0,
         'is_featured'       => isset($_POST['is_featured']) ? 1 : 0,
         'sort_order'        => max(0, (int) ($_POST['sort_order'] ?? 9999)),
+        'user_id'           => current_user_id(),
     ];
 
     if (!$data['name'] || !$data['manufacturer']) {
@@ -239,6 +240,7 @@ if ($action === 'list') {
         'condition'    => trim($_GET['condition'] ?? ''),
         'location'     => trim($_GET['location'] ?? ''),
         'is_public'    => null, // admin sees all
+        'user_id'      => current_user_id(),
     ];
 
     $admin_per_page   = PER_PAGE;
@@ -256,9 +258,9 @@ if ($action === 'list') {
     $admin_total_pages = 1;
 }
 
-$categories    = get_categories();
-$tags          = get_tags();
-$manufacturers = get_distinct_manufacturers();
+$categories    = get_categories(current_user_id());
+$tags          = get_tags(current_user_id());
+$manufacturers = get_distinct_manufacturers(current_user_id());
 
 // ─── FORM: Add / Edit ────────────────────────────────────────────────────────
 $editing   = null;
@@ -382,7 +384,7 @@ require_once __DIR__ . '/../includes/header_admin.php';
         </thead>
         <tbody>
             <?php if (empty($miniatures)): ?>
-                <tr><td colspan="8" class="text-center text-secondary py-4">Nenhuma miniatura cadastrada.</td></tr>
+                <tr><td colspan="10" class="text-center text-secondary py-4">Nenhuma miniatura cadastrada.</td></tr>
             <?php endif; ?>
             <?php foreach ($miniatures as $m): ?>
                 <tr>
@@ -922,7 +924,7 @@ require_once __DIR__ . '/../includes/header_admin.php';
                     <label class="form-label text-secondary">Adicionar fotos</label>
                     <input type="file" name="photos[]" multiple accept="image/*"
                            class="form-control bg-dark text-light border-secondary">
-                    <small class="text-secondary">Múltiplos arquivos. Máximo 5 MB por foto. JPEG, PNG, WebP ou GIF.</small>
+                    <small class="text-secondary">Múltiplos arquivos. Máximo 10 MB por foto. JPEG, PNG, WebP ou GIF.</small>
                 </div>
             </div>
         </div>

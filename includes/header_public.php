@@ -25,7 +25,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link rel="stylesheet" href="<?= h(APP_URL) ?>/assets/css/style.css">
 </head>
-<body class="public-layout">
+<body class="public-layout <?= $body_class ?? '' ?>">
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container">
         <a class="navbar-brand fw-bold" href="<?= h(APP_URL) ?>/">
@@ -37,7 +37,7 @@
         <div class="collapse navbar-collapse" id="navMain">
             <ul class="navbar-nav ms-auto">
                 <li class="nav-item">
-                    <a class="nav-link" href="/"><i class="fa fa-th me-1"></i>Coleção</a>
+                    <a class="nav-link" href="/collections"><i class="fa fa-users me-1"></i>Coleções</a>
                 </li>
             </ul>
         </div>

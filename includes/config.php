@@ -49,7 +49,7 @@ if (!defined('ALLOWED_IMAGE_TYPES')) {
     define('ALLOWED_IMAGE_TYPES', ['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 }
 if (!defined('MAX_UPLOAD_SIZE')) {
-    define('MAX_UPLOAD_SIZE', 5 * 1024 * 1024); // 5 MB
+    define('MAX_UPLOAD_SIZE', 10 * 1024 * 1024); // 10 MB
 }
 if (!defined('WEBP_QUALITY')) {
     define('WEBP_QUALITY', 85); // 0–100; 85 is a good balance of size vs. quality

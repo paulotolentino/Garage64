@@ -114,6 +114,10 @@ function _miniatures_where(array $filters, bool $fulltext = true): array {
         $where[] = 'm.location = ?';
         $params[] = $filters['location'];
     }
+    if (!empty($filters['user_id'])) {
+        $where[] = 'm.user_id = ?';
+        $params[] = (int) $filters['user_id'];
+    }
     if (!empty($filters['search'])) {
         $term = $filters['search'];
         if ($fulltext && strlen($term) >= 3) {
@@ -243,25 +247,45 @@ function get_primary_photo(int $miniature_id): ?string {
 
 // ─── Categories ──────────────────────────────────────────────────────────────
 
-function get_categories(): array {
+function get_categories(int $user_id = 0): array {
+    if ($user_id > 0) {
+        $stmt = db()->prepare('SELECT * FROM categories WHERE user_id = ? ORDER BY name ASC');
+        $stmt->execute([$user_id]);
+        return $stmt->fetchAll();
+    }
     return db()->query('SELECT * FROM categories ORDER BY name ASC')->fetchAll();
 }
 
 // ─── Tags ────────────────────────────────────────────────────────────────────
 
-function get_tags(): array {
+function get_tags(int $user_id = 0): array {
+    if ($user_id > 0) {
+        $stmt = db()->prepare('SELECT * FROM tags WHERE user_id = ? ORDER BY name ASC');
+        $stmt->execute([$user_id]);
+        return $stmt->fetchAll();
+    }
     return db()->query('SELECT * FROM tags ORDER BY name ASC')->fetchAll();
 }
 
 // ─── Manufacturers / Scales (distinct from existing data) ────────────────────
 
-function get_distinct_manufacturers(): array {
+function get_distinct_manufacturers(int $user_id = 0): array {
+    if ($user_id > 0) {
+        $stmt = db()->prepare("SELECT DISTINCT manufacturer FROM miniatures WHERE user_id = ? AND manufacturer != '' ORDER BY manufacturer ASC");
+        $stmt->execute([$user_id]);
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
     return db()->query(
         "SELECT DISTINCT manufacturer FROM miniatures WHERE manufacturer != '' ORDER BY manufacturer ASC"
     )->fetchAll(PDO::FETCH_COLUMN);
 }
 
-function get_distinct_scales(): array {
+function get_distinct_scales(int $user_id = 0): array {
+    if ($user_id > 0) {
+        $stmt = db()->prepare("SELECT DISTINCT scale FROM miniatures WHERE user_id = ? AND scale IS NOT NULL AND scale != '' ORDER BY scale ASC");
+        $stmt->execute([$user_id]);
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
     return db()->query(
         "SELECT DISTINCT scale FROM miniatures WHERE scale IS NOT NULL AND scale != '' ORDER BY scale ASC"
     )->fetchAll(PDO::FETCH_COLUMN);
@@ -269,56 +293,56 @@ function get_distinct_scales(): array {
 
 // ─── Dashboard stats ─────────────────────────────────────────────────────────
 
-function get_stats(): array {
-    $total = (int) db()->query('SELECT COUNT(*) FROM miniatures')->fetchColumn();
+function get_stats(int $user_id = 0): array {
+    $uid_where = $user_id > 0 ? 'WHERE user_id = ' . $user_id : '';
+    $uid_and   = $user_id > 0 ? 'AND m.user_id = ' . $user_id : '';
+
+    $total = (int) db()->query('SELECT COUNT(*) FROM miniatures ' . $uid_where)->fetchColumn();
 
     $by_scale = db()->query(
-        "SELECT scale, COUNT(*) AS total FROM miniatures
-         WHERE scale IS NOT NULL AND scale != ''
+        "SELECT scale, COUNT(*) AS total FROM miniatures m
+         WHERE scale IS NOT NULL AND scale != '' $uid_and
          GROUP BY scale ORDER BY total DESC"
     )->fetchAll();
 
     $by_manufacturer = db()->query(
         "SELECT manufacturer, COUNT(*) AS total FROM miniatures
-         GROUP BY manufacturer ORDER BY total DESC LIMIT 10"
+         $uid_where GROUP BY manufacturer ORDER BY total DESC LIMIT 10"
     )->fetchAll();
 
     $by_category = db()->query(
         "SELECT c.name, COUNT(m.id) AS total
          FROM miniatures m
          LEFT JOIN categories c ON m.category_id = c.id
+         WHERE 1=1 $uid_and
          GROUP BY c.name ORDER BY total DESC"
     )->fetchAll();
 
     $by_condition = db()->query(
-        "SELECT `condition`, COUNT(*) AS total FROM miniatures GROUP BY `condition`"
+        "SELECT `condition`, COUNT(*) AS total FROM miniatures $uid_where GROUP BY `condition`"
     )->fetchAll();
 
     $by_location = db()->query(
-        "SELECT location, COUNT(*) AS total FROM miniatures GROUP BY location"
+        "SELECT location, COUNT(*) AS total FROM miniatures $uid_where GROUP BY location"
     )->fetchAll();
 
     $financial = db()->query(
         "SELECT
-            SUM(purchase_price)                                          AS total_paid,
-            SUM(estimated_price)                                         AS total_estimated,
-            COUNT(purchase_price)                                        AS count_paid,
-            COUNT(estimated_price)                                       AS count_estimated,
-            SUM(CASE WHEN purchase_price IS NOT NULL
-                      AND estimated_price IS NOT NULL
-                     THEN purchase_price END)                            AS both_paid,
-            SUM(CASE WHEN purchase_price IS NOT NULL
-                      AND estimated_price IS NOT NULL
-                     THEN estimated_price END)                           AS both_estimated,
-            COUNT(CASE WHEN purchase_price IS NOT NULL
-                        AND estimated_price IS NOT NULL
-                       THEN 1 END)                                       AS count_both
-         FROM miniatures"
+            SUM(purchase_price)  AS total_paid,
+            SUM(estimated_price) AS total_estimated,
+            COUNT(purchase_price)  AS count_paid,
+            COUNT(estimated_price) AS count_estimated,
+            SUM(CASE WHEN purchase_price IS NOT NULL AND estimated_price IS NOT NULL THEN purchase_price END)  AS both_paid,
+            SUM(CASE WHEN purchase_price IS NOT NULL AND estimated_price IS NOT NULL THEN estimated_price END) AS both_estimated,
+            COUNT(CASE WHEN purchase_price IS NOT NULL AND estimated_price IS NOT NULL THEN 1 END) AS count_both
+         FROM miniatures $uid_where"
     )->fetch();
 
     try {
         $top_viewed = db()->query(
-            "SELECT id, name, manufacturer, views FROM miniatures WHERE is_public = 1 AND views > 0 ORDER BY views DESC LIMIT 5"
+            "SELECT id, name, manufacturer, views FROM miniatures m
+             WHERE is_public = 1 AND views > 0 $uid_and
+             ORDER BY views DESC LIMIT 5"
         )->fetchAll();
     } catch (\PDOException $e) {
         $top_viewed = [];
@@ -327,30 +351,117 @@ function get_stats(): array {
     return compact('total', 'by_scale', 'by_manufacturer', 'by_category', 'by_condition', 'by_location', 'financial', 'top_viewed');
 }
 
-function get_adjacent_miniatures(int $id): array {
-    $db   = db();
-    $stmt = $db->prepare('SELECT id, name, manufacturer FROM miniatures WHERE is_public = 1 AND id < ? ORDER BY id DESC LIMIT 1');
+function get_adjacent_miniatures(int $id, int $user_id = 0): array {
+    $db    = db();
+    $ucond = $user_id > 0 ? ' AND user_id = ' . $user_id : '';
+    $stmt  = $db->prepare("SELECT id, name, manufacturer FROM miniatures WHERE is_public = 1 AND id < ? $ucond ORDER BY id DESC LIMIT 1");
     $stmt->execute([$id]);
     $prev = $stmt->fetch() ?: null;
-    $stmt = $db->prepare('SELECT id, name, manufacturer FROM miniatures WHERE is_public = 1 AND id > ? ORDER BY id ASC LIMIT 1');
+    $stmt = $db->prepare("SELECT id, name, manufacturer FROM miniatures WHERE is_public = 1 AND id > ? $ucond ORDER BY id ASC LIMIT 1");
     $stmt->execute([$id]);
     $next = $stmt->fetch() ?: null;
     return compact('prev', 'next');
 }
 
+// ─── Users ───────────────────────────────────────────────────────────────────
+
+function get_user_by_slug(string $slug): ?array {
+    $stmt = db()->prepare(
+        'SELECT id, username, slug, display_name, bio
+         FROM admin_users WHERE slug = ? AND is_banned = 0 LIMIT 1'
+    );
+    $stmt->execute([$slug]);
+    return $stmt->fetch() ?: null;
+}
+
+function get_featured_collections(int $limit = 6): array {
+    try {
+        return db()->query(
+            "SELECT u.id, u.slug, u.display_name, u.bio, u.avatar,
+                    COUNT(m.id) AS mini_count
+             FROM admin_users u
+             INNER JOIN miniatures m ON m.user_id = u.id AND m.is_public = 1
+             WHERE u.is_banned = 0 AND u.is_featured = 1
+             GROUP BY u.id
+             ORDER BY mini_count DESC
+             LIMIT $limit"
+        )->fetchAll();
+    } catch (\PDOException $e) {
+        return []; // is_featured column may not exist yet
+    }
+}
+
+function get_all_collections(): array {
+    return db()->query(
+        "SELECT u.id, u.slug, u.display_name, u.bio, u.avatar,
+                COUNT(m.id) AS mini_count
+         FROM admin_users u
+         INNER JOIN miniatures m ON m.user_id = u.id AND m.is_public = 1
+         WHERE u.is_banned = 0
+         GROUP BY u.id
+         ORDER BY mini_count DESC, u.display_name ASC"
+    )->fetchAll();
+}
+
+function avatar_url(?string $avatar): string {
+    if ($avatar) {
+        return UPLOADS_URL . 'avatars/' . rawurlencode($avatar);
+    }
+    return APP_URL . '/assets/img/avatar-default.svg';
+}
+
 // ─── Wishlist ────────────────────────────────────────────────────────────────
 
-function get_wishlist(string $status = ''): array {
-    if ($status) {
-        $stmt = db()->prepare('SELECT * FROM wishlist WHERE status = ? ORDER BY created_at DESC');
-        $stmt->execute([$status]);
-    } else {
-        $stmt = db()->query('SELECT * FROM wishlist ORDER BY created_at DESC');
-    }
+function get_wishlist(string $status = '', int $user_id = 0): array {
+    $conds = [];
+    $params = [];
+    if ($user_id > 0) { $conds[] = 'user_id = ?'; $params[] = $user_id; }
+    if ($status)      { $conds[] = 'status = ?';  $params[] = $status; }
+    $where = $conds ? 'WHERE ' . implode(' AND ', $conds) : '';
+    $stmt = db()->prepare('SELECT * FROM wishlist ' . $where . ' ORDER BY created_at DESC');
+    $stmt->execute($params);
     return $stmt->fetchAll();
 }
 
 // ─── Photo upload ─────────────────────────────────────────────────────────────
+
+/**
+ * Read EXIF orientation from a JPEG without needing the PHP exif extension.
+ * Returns 1 (no rotation) when orientation cannot be determined.
+ */
+function jpeg_orientation(string $path): int {
+    $fh = @fopen($path, 'rb');
+    if (!$fh) return 1;
+    try {
+        if (fread($fh, 2) !== "\xFF\xD8") return 1; // not a JPEG
+        while (!feof($fh)) {
+            $marker = fread($fh, 2);
+            if (strlen($marker) < 2 || $marker[0] !== "\xFF") return 1;
+            $seg_len = unpack('n', fread($fh, 2))[1];
+            if ($seg_len < 2) return 1;
+            $data = fread($fh, $seg_len - 2);
+            // APP1 with Exif header
+            if ($marker === "\xFF\xE1" && str_starts_with($data, "Exif\x00\x00")) {
+                $tiff = substr($data, 6);
+                $le   = substr($tiff, 0, 2) === 'II'; // little-endian?
+                $u16  = fn($s) => $le ? unpack('v', $s)[1] : unpack('n', $s)[1];
+                $u32  = fn($s) => $le ? unpack('V', $s)[1] : unpack('N', $s)[1];
+                $ifd0 = $u32(substr($tiff, 4, 4));
+                $n    = $u16(substr($tiff, $ifd0, 2));
+                for ($i = 0; $i < $n; $i++) {
+                    $e = substr($tiff, $ifd0 + 2 + $i * 12, 12);
+                    if ($u16(substr($e, 0, 2)) === 0x0112) { // Orientation tag
+                        return (int) $u16(substr($e, 8, 2));
+                    }
+                }
+                return 1;
+            }
+        }
+    } finally {
+        fclose($fh);
+    }
+    return 1;
+}
 
 function upload_photo(array $file, int $miniature_id): ?string {
     if ($file['error'] !== UPLOAD_ERR_OK) {
@@ -392,6 +503,41 @@ function upload_photo(array $file, int $miniature_id): ?string {
         imagepalettetotruecolor($image);
         imagealphablending($image, true);
         imagesavealpha($image, true);
+    }
+
+    // Fix EXIF orientation (JPEGs from phones embed rotation metadata that GD ignores).
+    // Uses exif_read_data() if the extension is available, otherwise parses JPEG bytes directly.
+    // Some GD builds (or iOS uploads) already apply the rotation — we detect this by checking
+    // whether the loaded image dimensions match what we'd expect for the orientation tag.
+    if ($mime === 'image/jpeg') {
+        $has_exif_ext = function_exists('exif_read_data');
+        $orientation  = $has_exif_ext
+            ? (int) (@exif_read_data($file['tmp_name'])['Orientation'] ?? 1)
+            : jpeg_orientation($file['tmp_name']);
+
+        // Orientation 6 or 8 means the raw sensor data is rotated 90°.
+        // If GD already corrected it, imagesx/imagesy will reflect the rotated (portrait) dimensions.
+        // We only rotate when the image dimensions look un-corrected (wider than tall for 6/8).
+        $w = imagesx($image);
+        $h = imagesy($image);
+        $needs_rotate = match ($orientation) {
+            6, 8 => $w > $h,   // Should be portrait but loaded as landscape → needs rotation
+            3    => true,      // 180° flip — always apply (no dimension hint)
+            default => false,
+        };
+
+        if ($needs_rotate) {
+            $angle = match ($orientation) {
+                3 => 180,
+                6 => 270,
+                8 => 90,
+            };
+            $rotated = imagerotate($image, $angle, 0);
+            if ($rotated) {
+                imagedestroy($image);
+                $image = $rotated;
+            }
+        }
     }
 
     $ok = imagewebp($image, $dest, WEBP_QUALITY);

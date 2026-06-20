@@ -3,6 +3,18 @@ DirectoryIndex index.php
 
 ErrorDocument 404 /404.php
 
+# PHP upload limits (mod_php — for PHP-FPM see .user.ini)
+<IfModule mod_php8.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 25M
+    php_value memory_limit 256M
+</IfModule>
+<IfModule mod_php7.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 25M
+    php_value memory_limit 256M
+</IfModule>
+
 # Security headers
 <IfModule mod_headers.c>
     Header always set X-Content-Type-Options "nosniff"
@@ -39,6 +51,9 @@ ErrorDocument 404 /404.php
 
     # Miniature detail: /mini/{id} or /mini/{id}/{slug}
     RewriteRule ^mini/(\d+)(/[^/]*)?/?$ miniature.php?id=$1 [L,QSA]
+
+    # User collection: /u/{slug}
+    RewriteRule ^u/([a-z0-9_-]{2,30})/?$ collection.php?slug=$1 [L,QSA]
 
     # Clean URLs: strip .php from any page that has a matching .php file
     RewriteCond %{REQUEST_FILENAME} !-f

@@ -15,10 +15,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('/admin/categories');
     }
     if ($id) {
-        db()->prepare('UPDATE categories SET name = ? WHERE id = ?')->execute([$name, $id]);
+        db()->prepare('UPDATE categories SET name = ? WHERE id = ? AND user_id = ?')->execute([$name, $id, current_user_id()]);
         flash('Categoria atualizada.');
     } else {
-        db()->prepare('INSERT INTO categories (name) VALUES (?)')->execute([$name]);
+        db()->prepare('INSERT INTO categories (name, user_id) VALUES (?, ?)')->execute([$name, current_user_id()]);
         flash('Categoria criada.');
     }
     redirect('/admin/categories');
@@ -26,19 +26,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Delete
 if (isset($_GET['delete'])) {
-    db()->prepare('DELETE FROM categories WHERE id = ?')->execute([(int) $_GET['delete']]);
+    db()->prepare('DELETE FROM categories WHERE id = ? AND user_id = ?')->execute([(int) $_GET['delete'], current_user_id()]);
     flash('Categoria removida.');
     redirect('/admin/categories');
 }
 
 $editing    = null;
 if (isset($_GET['edit'])) {
-    $stmt = db()->prepare('SELECT * FROM categories WHERE id = ?');
-    $stmt->execute([(int) $_GET['edit']]);
+    $stmt = db()->prepare('SELECT * FROM categories WHERE id = ? AND user_id = ?');
+    $stmt->execute([(int) $_GET['edit'], current_user_id()]);
     $editing = $stmt->fetch() ?: null;
 }
 
-$categories = get_categories();
+$categories = get_categories(current_user_id());
 $page_title = 'Categorias';
 
 require_once __DIR__ . '/../includes/header_admin.php';

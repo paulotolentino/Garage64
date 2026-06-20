@@ -6,25 +6,30 @@ require_once __DIR__ . '/../includes/functions.php';
 require_login();
 
 // Fetch all miniatures with category and tags
-$stmt = db()->query(
+$stmt = db()->prepare(
     'SELECT m.*,
             c.name AS category_name
      FROM miniatures m
      LEFT JOIN categories c ON m.category_id = c.id
+     WHERE m.user_id = ?
      ORDER BY m.created_at DESC'
 );
+$stmt->execute([current_user_id()]);
 $miniatures = $stmt->fetchAll();
 
 // Fetch all tags per miniature in one query (avoids N+1)
 $tags_by_miniature = [];
 if (!empty($miniatures)) {
-    $tag_rows = db()->query(
+    $tag_rows = db()->prepare(
         'SELECT mt.miniature_id, t.name
          FROM miniature_tags mt
          INNER JOIN tags t ON t.id = mt.tag_id
+         INNER JOIN miniatures m ON m.id = mt.miniature_id
+         WHERE m.user_id = ?
          ORDER BY t.name ASC'
-    )->fetchAll();
-    foreach ($tag_rows as $row) {
+    );
+    $tag_rows->execute([current_user_id()]);
+    foreach ($tag_rows->fetchAll() as $row) {
         $tags_by_miniature[$row['miniature_id']][] = $row['name'];
     }
 }

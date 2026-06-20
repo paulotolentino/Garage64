@@ -9,8 +9,8 @@ require_login();
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['convert_id'])) {
     verify_csrf();
     $id = (int) $_POST['convert_id'];
-    $stmt = db()->prepare('SELECT * FROM wishlist WHERE id = ?');
-    $stmt->execute([$id]);
+    $stmt = db()->prepare('SELECT * FROM wishlist WHERE id = ? AND user_id = ?');
+    $stmt->execute([$id, current_user_id()]);
     $wish = $stmt->fetch();
     if ($wish) {
         $manufacturer = trim($wish['manufacturer'] ?? '');
@@ -19,18 +19,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['convert_id'])) {
             redirect('/admin/wishlist?edit=' . $id);
         }
         $ins = db()->prepare(
-            'INSERT INTO miniatures (name, manufacturer, scale, status, private_notes)
-             VALUES (:name, :manufacturer, :scale, :status, :private_notes)'
+            'INSERT INTO miniatures (name, manufacturer, scale, `condition`, location, private_notes, user_id)
+             VALUES (:name, :manufacturer, :scale, :condition, :location, :private_notes, :user_id)'
         );
         $ins->execute([
             'name'          => $wish['name'],
             'manufacturer'  => $manufacturer,
             'scale'         => $wish['scale'],
-            'status'        => 'sealed',
+            'condition'     => 'sealed',
+            'location'      => 'storage',
             'private_notes' => $wish['notes'],
+            'user_id'       => current_user_id(),
         ]);
         $mini_id = (int) db()->lastInsertId();
-        db()->prepare("UPDATE wishlist SET status = 'purchased' WHERE id = ?")->execute([$id]);
+        db()->prepare("UPDATE wishlist SET status = 'purchased' WHERE id = ? AND user_id = ?")->execute([$id, current_user_id()]);
         flash('Peça convertida para a coleção! Edite os detalhes agora.');
         redirect('/admin/miniatures?action=edit&id=' . $mini_id);
     }
@@ -49,6 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'reference_url' => trim($_POST['reference_url'] ?? '') ?: null,
         'notes'         => trim($_POST['notes'] ?? '') ?: null,
         'status'        => $_POST['status'] ?? 'wanted',
+        'user_id'       => current_user_id(),
     ];
 
     if (!$data['name']) {
@@ -57,9 +60,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($id) {
-        $sets = implode(', ', array_map(fn($k) => "$k = :$k", array_keys($data)));
-        $data['id'] = $id;
-        db()->prepare("UPDATE wishlist SET $sets WHERE id = :id")->execute($data);
+        // remove user_id from SET (it's in WHERE)
+        $update_data = $data;
+        unset($update_data['user_id']);
+        $sets = implode(', ', array_map(fn($k) => "$k = :$k", array_keys($update_data)));
+        $update_data['id']      = $id;
+        $update_data['user_id'] = current_user_id();
+        db()->prepare("UPDATE wishlist SET $sets WHERE id = :id AND user_id = :user_id")->execute($update_data);
         flash('Wishlist atualizada.');
     } else {
         $cols = implode(', ', array_keys($data));
@@ -73,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // ─── Delete ───────────────────────────────────────────────────────────────────
 if (isset($_GET['delete'])) {
-    db()->prepare('DELETE FROM wishlist WHERE id = ?')->execute([(int) $_GET['delete']]);
+    db()->prepare('DELETE FROM wishlist WHERE id = ? AND user_id = ?')->execute([(int) $_GET['delete'], current_user_id()]);
     flash('Item removido da wishlist.');
     redirect('/admin/wishlist.php');
 }
@@ -81,13 +88,13 @@ if (isset($_GET['delete'])) {
 // ─── Edit ─────────────────────────────────────────────────────────────────────
 $editing = null;
 if (isset($_GET['edit'])) {
-    $stmt = db()->prepare('SELECT * FROM wishlist WHERE id = ?');
-    $stmt->execute([(int) $_GET['edit']]);
+    $stmt = db()->prepare('SELECT * FROM wishlist WHERE id = ? AND user_id = ?');
+    $stmt->execute([(int) $_GET['edit'], current_user_id()]);
     $editing = $stmt->fetch() ?: null;
 }
 
 $filter_status = $_GET['status'] ?? '';
-$wishlist      = get_wishlist($filter_status);
+$wishlist      = get_wishlist($filter_status, current_user_id());
 $page_title    = 'Wishlist';
 
 require_once __DIR__ . '/../includes/header_admin.php';

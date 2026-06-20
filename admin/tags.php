@@ -15,10 +15,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('/admin/tags');
     }
     if ($id) {
-        db()->prepare('UPDATE tags SET name = ? WHERE id = ?')->execute([$name, $id]);
+        db()->prepare('UPDATE tags SET name = ? WHERE id = ? AND user_id = ?')->execute([$name, $id, current_user_id()]);
         flash('Tag atualizada.');
     } else {
-        db()->prepare('INSERT INTO tags (name) VALUES (?)')->execute([$name]);
+        db()->prepare('INSERT INTO tags (name, user_id) VALUES (?, ?)')->execute([$name, current_user_id()]);
         flash('Tag criada.');
     }
     redirect('/admin/tags.php');
@@ -26,19 +26,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Delete
 if (isset($_GET['delete'])) {
-    db()->prepare('DELETE FROM tags WHERE id = ?')->execute([(int) $_GET['delete']]);
+    db()->prepare('DELETE FROM tags WHERE id = ? AND user_id = ?')->execute([(int) $_GET['delete'], current_user_id()]);
     flash('Tag removida.');
     redirect('/admin/tags.php');
 }
 
 $editing = null;
 if (isset($_GET['edit'])) {
-    $stmt = db()->prepare('SELECT * FROM tags WHERE id = ?');
-    $stmt->execute([(int) $_GET['edit']]);
+    $stmt = db()->prepare('SELECT * FROM tags WHERE id = ? AND user_id = ?');
+    $stmt->execute([(int) $_GET['edit'], current_user_id()]);
     $editing = $stmt->fetch() ?: null;
 }
 
-$tags       = get_tags();
+$tags       = get_tags(current_user_id());
 $page_title = 'Tags';
 
 require_once __DIR__ . '/../includes/header_admin.php';

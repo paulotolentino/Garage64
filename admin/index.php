@@ -11,7 +11,7 @@ $cache_ttl = 300;
 if (isset($_SESSION[$cache_key]) && (time() - $_SESSION[$cache_key]['ts']) < $cache_ttl) {
     $stats = $_SESSION[$cache_key]['data'];
 } else {
-    $stats = get_stats();
+    $stats = get_stats(current_user_id());
     $_SESSION[$cache_key] = ['ts' => time(), 'data' => $stats];
 }
 $page_title = 'Dashboard';
@@ -123,7 +123,9 @@ $app_pct       = ($both_paid && $appreciation !== null) ? ($appreciation / $both
             <div class="card-body">
                 <div class="text-secondary small mb-1"><i class="fa fa-eye-slash me-1"></i>Visibilidade pública</div>
                 <?php
-                $pub_count = db()->query('SELECT COUNT(*) FROM miniatures WHERE is_public = 1')->fetchColumn();
+                $pub_stmt = db()->prepare('SELECT COUNT(*) FROM miniatures WHERE is_public = 1 AND user_id = ?');
+                $pub_stmt->execute([current_user_id()]);
+                $pub_count = (int) $pub_stmt->fetchColumn();
                 $prv_count = $stats['total'] - $pub_count;
                 ?>
                 <div class="h4 mb-0 text-light"><?= $pub_count ?> <small class="text-secondary fs-6">públicas</small></div>

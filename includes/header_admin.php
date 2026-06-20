@@ -28,7 +28,7 @@
 <aside class="admin-sidebar" id="adminSidebar">
     <div class="admin-sidebar-brand">
         <i class="fa fa-garage me-2"></i><?= h(APP_NAME) ?>
-        <small class="d-block text-secondary mt-1" style="font-size:.7rem;letter-spacing:.08em">ADMIN PANEL</small>
+        <small class="d-block text-secondary mt-1" style="font-size:.7rem;letter-spacing:.08em"><?= is_superadmin() ? 'ADMIN PANEL' : 'PAINEL' ?></small>
     </div>
 
     <nav class="admin-sidebar-nav">
@@ -56,15 +56,25 @@
         </a>
 
         <div class="admin-nav-section">Ferramentas</div>
-        <a href="<?= h(APP_URL) ?>/admin/migrate_webp" class="admin-nav-link <?= $is('migrate_webp.php') ?>">
-            <i class="fa fa-images"></i>Migração WebP
+        <?php if (is_superadmin()): ?>
+        <a href="<?= h(APP_URL) ?>/admin/manutencao" class="admin-nav-link <?= $is('manutencao.php') ?>">
+            <i class="fa fa-wrench"></i>Manutenção
         </a>
+        <?php endif; ?>
         <a href="<?= h(APP_URL) ?>/admin/export" class="admin-nav-link">
             <i class="fa fa-file-csv"></i>Exportar CSV
         </a>
-        <a href="<?= h(APP_URL) ?>/" target="_blank" class="admin-nav-link">
+        <a href="<?= h(APP_URL) ?>/u/<?= e(current_user_slug()) ?>" target="_blank" class="admin-nav-link">
             <i class="fa fa-eye"></i>Ver público
         </a>
+        <a href="<?= h(APP_URL) ?>/admin/profile" class="admin-nav-link <?= $is('profile.php') ?>">
+            <i class="fa fa-user-circle"></i>Meu Perfil
+        </a>
+        <?php if (is_superadmin()): ?>
+        <a href="<?= h(APP_URL) ?>/admin/users" class="admin-nav-link <?= $is('users.php') ?>">
+            <i class="fa fa-users"></i>Usuários
+        </a>
+        <?php endif; ?>
     </nav>
 
     <div class="admin-sidebar-footer">
