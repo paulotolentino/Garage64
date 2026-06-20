@@ -26,20 +26,24 @@
     <link rel="stylesheet" href="<?= h(APP_URL) ?>/assets/css/style.css">
 </head>
 <body class="public-layout <?= $body_class ?? '' ?>">
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
     <div class="container">
-        <a class="navbar-brand fw-bold" href="<?= h(APP_URL) ?>/">
-            <i class="fa fa-garage me-2"></i><?= h(APP_NAME) ?>
+        <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="<?= h(APP_URL) ?>/">
+            <img src="<?= h(APP_URL) ?>/assets/img/logo.svg" alt="" width="22" height="20" style="flex-shrink:0;">
+            <?= h(APP_NAME) ?>
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMain">
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navMain">
-            <ul class="navbar-nav ms-auto">
+            <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
                 <li class="nav-item">
                     <a class="nav-link" href="/collections"><i class="fa fa-users me-1"></i>Coleções</a>
                 </li>
             </ul>
+            <a class="btn btn-outline-warning btn-sm px-3 ms-lg-3 mt-2 mt-lg-0" href="/admin/login">
+                <i class="fa fa-right-to-bracket me-1"></i>Entrar
+            </a>
         </div>
     </div>
 </nav>

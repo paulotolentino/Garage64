@@ -21,6 +21,7 @@ require_once __DIR__ . '/includes/header_public.php';
 <!-- ── Hero ─────────────────────────────────────────────────────────── -->
 <section class="lp-hero">
     <div class="lp-hero-glow"></div>
+    <div class="lp-hero-grid"></div>
     <p class="lp-eyebrow">Para colecionadores de diecast</p>
     <h1 class="lp-hero-title mb-3">
         Catalogue, organize<br>
@@ -39,22 +40,25 @@ require_once __DIR__ . '/includes/header_public.php';
             Ver coleções
         </a>
     </div>
+    <p class="mt-4 mb-0" style="font-size:.875rem;color:#6b7585;">
+        Já tem uma conta? <a href="/admin/login" class="text-warning text-decoration-none fw-semibold">Entrar</a>
+    </p>
 </section>
 
 <!-- ── Stats ─────────────────────────────────────────────────────────── -->
-<?php if ($lp_collectors > 1 || $lp_minis > 0): ?>
+<?php if ($lp_collectors >= 1 || $lp_minis > 0): ?>
 <div class="lp-stats-bar">
     <div class="d-flex justify-content-center align-items-center gap-0 flex-wrap">
         <?php if ($lp_collectors > 0): ?>
         <div class="lp-stat-item">
-            <div class="lp-stat-number"><?= number_format($lp_collectors) ?></div>
+            <div class="lp-stat-number" data-count="<?= $lp_collectors ?>"><?= number_format($lp_collectors) ?></div>
             <div class="lp-stat-label">colecionador<?= $lp_collectors !== 1 ? 'es' : '' ?></div>
         </div>
         <div class="lp-stat-divider"></div>
         <?php endif; ?>
         <?php if ($lp_minis > 0): ?>
         <div class="lp-stat-item">
-            <div class="lp-stat-number"><?= number_format($lp_minis) ?></div>
+            <div class="lp-stat-number" data-count="<?= $lp_minis ?>"><?= number_format($lp_minis) ?></div>
             <div class="lp-stat-label">miniatura<?= $lp_minis !== 1 ? 's' : '' ?> catalogada<?= $lp_minis !== 1 ? 's' : '' ?></div>
         </div>
         <div class="lp-stat-divider"></div>
@@ -69,48 +73,48 @@ require_once __DIR__ . '/includes/header_public.php';
 
 <!-- ── Features ──────────────────────────────────────────────────────── -->
 <section class="py-5 my-2">
-    <div class="text-center mb-5">
+    <div class="text-center mb-5 lp-animate">
         <p class="lp-eyebrow">Funcionalidades</p>
         <h2 class="lp-section-title">Tudo que um colecionador precisa</h2>
         <p class="text-secondary mt-2 mx-auto" style="max-width:460px;">Uma ferramenta simples e completa para documentar sua paixão por diecast.</p>
     </div>
     <div class="row g-4">
-        <div class="col-12 col-sm-6 col-md-4">
+        <div class="col-12 col-sm-6 col-md-4 lp-animate" style="--lp-delay:0s">
             <div class="lp-feature-card">
                 <div class="lp-feature-icon"><i class="fa fa-database"></i></div>
                 <h5 class="text-light fw-semibold mb-2">Catálogo completo</h5>
                 <p class="text-secondary small mb-0">Fabricante, escala, ano, condição, embalagem, valor pago, estimado e notas privadas.</p>
             </div>
         </div>
-        <div class="col-12 col-sm-6 col-md-4">
+        <div class="col-12 col-sm-6 col-md-4 lp-animate" style="--lp-delay:0.08s">
             <div class="lp-feature-card">
                 <div class="lp-feature-icon"><i class="fa fa-images"></i></div>
                 <h5 class="text-light fw-semibold mb-2">Galeria de fotos</h5>
                 <p class="text-secondary small mb-0">Múltiplas fotos por peça com geração automática de thumbnails otimizados em WebP.</p>
             </div>
         </div>
-        <div class="col-12 col-sm-6 col-md-4">
+        <div class="col-12 col-sm-6 col-md-4 lp-animate" style="--lp-delay:0.16s">
             <div class="lp-feature-card">
                 <div class="lp-feature-icon"><i class="fa fa-globe"></i></div>
                 <h5 class="text-light fw-semibold mb-2">Página pública</h5>
                 <p class="text-secondary small mb-0">Link pessoal com filtros, busca por nome e visualização em grade ou lista.</p>
             </div>
         </div>
-        <div class="col-12 col-sm-6 col-md-4">
+        <div class="col-12 col-sm-6 col-md-4 lp-animate" style="--lp-delay:0.24s">
             <div class="lp-feature-card">
                 <div class="lp-feature-icon"><i class="fa fa-star"></i></div>
                 <h5 class="text-light fw-semibold mb-2">Destaques</h5>
                 <p class="text-secondary small mb-0">Marque as peças favoritas para que apareçam sempre no topo da sua coleção.</p>
             </div>
         </div>
-        <div class="col-12 col-sm-6 col-md-4">
+        <div class="col-12 col-sm-6 col-md-4 lp-animate" style="--lp-delay:0.32s">
             <div class="lp-feature-card">
                 <div class="lp-feature-icon"><i class="fa fa-heart"></i></div>
                 <h5 class="text-light fw-semibold mb-2">Wishlist</h5>
                 <p class="text-secondary small mb-0">Gerencie as peças que deseja adquirir e converta para a coleção com um clique.</p>
             </div>
         </div>
-        <div class="col-12 col-sm-6 col-md-4">
+        <div class="col-12 col-sm-6 col-md-4 lp-animate" style="--lp-delay:0.40s">
             <div class="lp-feature-card">
                 <div class="lp-feature-icon"><i class="fa fa-chart-line"></i></div>
                 <h5 class="text-light fw-semibold mb-2">Estatísticas</h5>
@@ -133,8 +137,8 @@ require_once __DIR__ . '/includes/header_public.php';
         </a>
     </div>
     <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 g-3">
-        <?php foreach ($collections as $col): ?>
-        <div class="col">
+        <?php $lp_ci = 0; foreach ($collections as $col): ?>
+        <div class="col lp-animate" style="--lp-delay:<?= number_format($lp_ci++ * 0.07, 2) ?>s">
             <a href="/u/<?= e($col['slug']) ?>" class="text-decoration-none">
                 <div class="lp-collection-card">
                     <?php if (!empty($col['avatar'])): ?>
@@ -164,7 +168,7 @@ require_once __DIR__ . '/includes/header_public.php';
 <?php endif; ?>
 
 <!-- ── Bottom CTA ────────────────────────────────────────────────────── -->
-<section class="lp-cta-section">
+<section class="lp-cta-section lp-animate">
     <p class="lp-eyebrow">Comece agora</p>
     <h2 class="lp-section-title mb-3">Sua coleção merece um lugar próprio.</h2>
     <p class="text-secondary mb-4 mx-auto" style="max-width:400px;">Crie sua conta gratuita e comece a catalogar em minutos.</p>

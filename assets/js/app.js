@@ -60,4 +60,58 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
+    // ── Sticky navbar: add frosted-glass class after scrolling ────────────────
+    (function () {
+        var nav = document.querySelector('.navbar');
+        if (!nav) return;
+        function onScroll() {
+            nav.classList.toggle('navbar-scrolled', window.scrollY > 50);
+        }
+        window.addEventListener('scroll', onScroll, { passive: true });
+        onScroll();
+    }());
+
+    // ── Scroll reveal: trigger lp-animate → lp-visible via IntersectionObserver
+    (function () {
+        var items = document.querySelectorAll('.lp-animate');
+        if (!items.length) return;
+        if (!('IntersectionObserver' in window)) {
+            items.forEach(function (el) { el.classList.add('lp-visible'); });
+            return;
+        }
+        var io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('lp-visible');
+                    io.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+        items.forEach(function (el) { io.observe(el); });
+    }());
+
+    // ── Animated counters for stat numbers ────────────────────────────────────
+    (function () {
+        var counters = document.querySelectorAll('.lp-stat-number[data-count]');
+        if (!counters.length || !('IntersectionObserver' in window)) return;
+        var io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+                if (!entry.isIntersecting) return;
+                var el = entry.target;
+                var target = parseInt(el.dataset.count, 10);
+                if (!target) return;
+                io.unobserve(el);
+                var current = 0;
+                var steps = 40;
+                var inc = target / steps;
+                var timer = setInterval(function () {
+                    current = Math.min(current + inc, target);
+                    el.textContent = Math.floor(current).toLocaleString('pt-BR');
+                    if (current >= target) clearInterval(timer);
+                }, 1000 / steps);
+            });
+        }, { threshold: 0.5 });
+        counters.forEach(function (el) { io.observe(el); });
+    }());
+
 });
