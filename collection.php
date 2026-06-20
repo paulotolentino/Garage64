@@ -27,7 +27,7 @@ $filters = [
     'location'     => trim($_GET['location'] ?? ''),
     'search'       => trim($_GET['search'] ?? ''),
     'tag_id'       => (int) ($_GET['tag_id'] ?? 0) ?: null,
-    'sort'         => in_array($_GET['sort'] ?? '', ['name','manufacturer','year_asc','year_desc']) ? $_GET['sort'] : '',
+    'sort'         => in_array($_GET['sort'] ?? '', ['name','manufacturer','year_asc','year_desc','recent']) ? $_GET['sort'] : '',
     'is_public'    => 1,
     'user_id'      => $uid,
 ];
@@ -47,147 +47,275 @@ $tags          = get_tags($uid);
 $display_name = $owner['display_name'] ?: $owner['username'];
 $page_title   = 'Coleção de ' . $display_name;
 $base_url     = '/u/' . e($slug);
+$body_class   = 'cp-page';
+
+// Dados de perfil que não vêm de get_user_by_slug (coluna avatar pode não existir).
+$owner_avatar = null;
+$owner_since  = null;
+try {
+    $st = db()->prepare('SELECT avatar, created_at FROM admin_users WHERE id = ? LIMIT 1');
+    $st->execute([$uid]);
+    if ($row = $st->fetch()) {
+        $owner_avatar = $row['avatar'] ?? null;
+        $owner_since  = $row['created_at'] ?? null;
+    }
+} catch (\Throwable $e) {
+    try {
+        $st = db()->prepare('SELECT created_at FROM admin_users WHERE id = ? LIMIT 1');
+        $st->execute([$uid]);
+        $owner_since = $st->fetchColumn() ?: null;
+    } catch (\Throwable $e2) { /* ignora */ }
+}
+
+// Estatísticas da garagem (coleção pública completa, independente dos filtros).
+$collection_total = count_miniatures(['user_id' => $uid, 'is_public' => 1]);
+$featured_total   = 0;
+try {
+    $st = db()->prepare('SELECT COUNT(*) FROM miniatures WHERE user_id = ? AND is_public = 1 AND is_featured = 1');
+    $st->execute([$uid]);
+    $featured_total = (int) $st->fetchColumn();
+} catch (\Throwable $e) { /* coluna is_featured pode não existir */ }
+
+$has_active_filters = (bool) array_filter(array_intersect_key(
+    $filters, array_flip(['manufacturer','scale','category_id','condition','location','search','tag_id'])
+));
+
+// Estado dos painéis colapsáveis persistido via query string (?about=1 / ?filters=1).
+$open_about   = !empty($_GET['about']);
+$open_filters = $has_active_filters || !empty($_GET['filters']);
+$panel_qs = [];
+if ($open_about)   $panel_qs['about']   = 1;
+if ($open_filters) $panel_qs['filters'] = 1;
+$clear_url = $base_url . ($panel_qs ? '?' . http_build_query($panel_qs) : '');
 
 require_once __DIR__ . '/includes/header_public.php';
 ?>
 
-<div class="d-flex align-items-center mb-4 flex-wrap gap-2">
-    <div class="me-auto">
-        <h1 class="h3 mb-0"><i class="fa fa-user-circle me-2 text-warning"></i><?= e($display_name) ?></h1>
-        <?php if ($owner['bio']): ?>
-            <p class="text-secondary small mb-0 mt-1"><?= e($owner['bio']) ?></p>
-        <?php endif; ?>
+<!-- Barra compacta (sempre visível) ───────────────────────────────────── -->
+<div class="cp-bar">
+    <div class="cp-bar-id">
+        <div class="cp-bar-avatar">
+            <?php if ($owner_avatar): ?>
+                <img src="<?= e(avatar_url($owner_avatar)) ?>" alt="<?= e($display_name) ?>">
+            <?php else: ?>
+                <span class="cp-bar-initial"><?= mb_strtoupper(mb_substr($display_name, 0, 1)) ?></span>
+            <?php endif; ?>
+        </div>
+        <div class="cp-bar-meta">
+            <span class="cp-bar-name"><?= e($display_name) ?></span>
+            <span class="cp-bar-handle">@<?= e($slug) ?> · <?= number_format($collection_total) ?> peça<?= $collection_total !== 1 ? 's' : '' ?></span>
+        </div>
     </div>
-    <span class="badge bg-secondary fs-6"><?= $total ?> peça<?= $total !== 1 ? 's' : '' ?></span>
-    <div class="btn-group btn-group-sm" role="group" aria-label="Visualização">
-        <button id="viewGrid" class="btn btn-warning" title="Grade"><i class="fa fa-grip"></i></button>
-        <button id="viewList" class="btn btn-outline-secondary" title="Lista"><i class="fa fa-list"></i></button>
+    <div class="cp-bar-actions">
+        <button type="button" class="cp-toolbtn <?= $open_about ? 'is-open' : '' ?>" id="btnAbout"
+                aria-expanded="<?= $open_about ? 'true' : 'false' ?>" aria-controls="cpAbout">
+            <i class="fa fa-circle-info"></i>
+            <span>Sobre o colecionador</span>
+            <i class="fa fa-chevron-down cp-tool-caret"></i>
+        </button>
+        <button type="button" class="cp-toolbtn <?= $open_filters ? 'is-open' : '' ?>" id="btnFilters"
+                aria-expanded="<?= $open_filters ? 'true' : 'false' ?>" aria-controls="cpFilters">
+            <i class="fa fa-sliders"></i>
+            <span>Filtros</span>
+            <i class="fa fa-chevron-down cp-tool-caret"></i>
+        </button>
     </div>
 </div>
 
-<!-- Filters -->
-<form method="get" class="card bg-dark border-secondary mb-4">
-    <div class="card-body">
-        <div class="row g-2 align-items-end">
-            <div class="col-12 col-md-4">
-                <input type="search" name="search" class="form-control form-control-sm bg-dark text-light border-secondary"
-                       placeholder="Buscar por nome, fabricante ou modelo..."
-                       value="<?= e($filters['search']) ?>">
-            </div>
-            <div class="col-6 col-md-2">
-                <select name="manufacturer" class="form-select form-select-sm bg-dark text-light border-secondary">
-                    <option value="">Fabricante</option>
-                    <?php foreach ($manufacturers as $m): ?>
-                        <option value="<?= e($m) ?>" <?= $filters['manufacturer'] === $m ? 'selected' : '' ?>><?= e($m) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="col-6 col-md-2">
-                <select name="scale" class="form-select form-select-sm bg-dark text-light border-secondary">
-                    <option value="">Escala</option>
-                    <?php foreach ($scales as $s): ?>
-                        <option value="<?= e($s) ?>" <?= $filters['scale'] === $s ? 'selected' : '' ?>><?= e($s) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="col-6 col-md-2">
-                <select name="category_id" class="form-select form-select-sm bg-dark text-light border-secondary">
-                    <option value="">Categoria</option>
-                    <?php foreach ($categories as $cat): ?>
-                        <option value="<?= $cat['id'] ?>" <?= (int)($filters['category_id'] ?? 0) === (int)$cat['id'] ? 'selected' : '' ?>><?= e($cat['name']) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="col-6 col-md-1">
-                <select name="condition" class="form-select form-select-sm bg-dark text-light border-secondary">
-                    <option value="">Embalagem</option>
-                    <option value="sealed" <?= ($filters['condition'] ?? '') === 'sealed' ? 'selected' : '' ?>>Lacrada</option>
-                    <option value="open"   <?= ($filters['condition'] ?? '') === 'open'   ? 'selected' : '' ?>>Aberta</option>
-                    <option value="no_box" <?= ($filters['condition'] ?? '') === 'no_box' ? 'selected' : '' ?>>Sem caixa</option>
-                </select>
-            </div>
-            <div class="col-6 col-md-1">
-                <select name="location" class="form-select form-select-sm bg-dark text-light border-secondary">
-                    <option value="">Local</option>
-                    <option value="storage" <?= ($filters['location'] ?? '') === 'storage' ? 'selected' : '' ?>>Armazenada</option>
-                    <option value="display" <?= ($filters['location'] ?? '') === 'display' ? 'selected' : '' ?>>Exposição</option>
-                </select>
-            </div>
-            <div class="col-6 col-md-2">
-                <select name="sort" class="form-select form-select-sm bg-dark text-light border-secondary">
-                    <option value="" <?= $filters['sort'] === '' ? 'selected' : '' ?>>Mais recente</option>
-                    <option value="name" <?= $filters['sort'] === 'name' ? 'selected' : '' ?>>Nome A–Z</option>
-                    <option value="manufacturer" <?= $filters['sort'] === 'manufacturer' ? 'selected' : '' ?>>Fabricante</option>
-                    <option value="year_desc" <?= $filters['sort'] === 'year_desc' ? 'selected' : '' ?>>Ano (novo→antigo)</option>
-                    <option value="year_asc" <?= $filters['sort'] === 'year_asc' ? 'selected' : '' ?>>Ano (antigo→novo)</option>
-                </select>
-            </div>
-            <div class="col-12 col-md-1 d-flex gap-1">
-                <button type="submit" class="btn btn-warning btn-sm flex-grow-1"><i class="fa fa-search"></i></button>
-                <a href="<?= $base_url ?>" class="btn btn-outline-secondary btn-sm"><i class="fa fa-times"></i></a>
-            </div>
-        </div>
-        <?php if (!empty($tags)):
-            $tag_qs_base = [];
-            foreach (['manufacturer','scale','category_id','condition','location','search','sort'] as $k) {
-                if (!empty($filters[$k])) $tag_qs_base[$k] = $filters[$k];
-            }
-            $tag_qs_str   = $base_url . ($tag_qs_base ? '?' . http_build_query($tag_qs_base) . '&' : '?');
-            $tag_qs_clear = $base_url . ($tag_qs_base ? '?' . http_build_query($tag_qs_base) : '');
-        ?>
-        <div class="mt-2 d-flex flex-wrap gap-1">
-            <a href="<?= $tag_qs_clear ?>" class="badge <?= !$filters['tag_id'] ? 'bg-warning text-dark' : 'bg-secondary' ?> text-decoration-none">Todas</a>
-            <?php foreach ($tags as $tag): ?>
-                <a href="<?= $tag_qs_str ?>tag_id=<?= $tag['id'] ?>"
-                   class="badge <?= (int)($filters['tag_id'] ?? 0) === (int)$tag['id'] ? 'bg-warning text-dark' : 'bg-secondary' ?> text-decoration-none">
-                    <?= e($tag['name']) ?>
-                </a>
-            <?php endforeach; ?>
-        </div>
+<!-- Painel do colecionador (colapsado por padrão) ─────────────────────── -->
+<div id="cpAbout" class="cp-collapse <?= $open_about ? 'is-open' : '' ?>">
+<!-- Cabeçalho de perfil ──────────────────────────────────────────────── -->
+<section class="cp-profile">
+    <div class="cp-profile-avatar">
+        <?php if ($owner_avatar): ?>
+            <img src="<?= e(avatar_url($owner_avatar)) ?>" alt="<?= e($display_name) ?>">
+        <?php else: ?>
+            <span class="cp-profile-initial"><?= mb_strtoupper(mb_substr($display_name, 0, 1)) ?></span>
         <?php endif; ?>
     </div>
-</form>
+    <div class="cp-profile-info">
+        <h1 class="cp-profile-name"><?= e($display_name) ?></h1>
+        <div class="cp-profile-handle">
+            @<?= e($slug) ?><?php if ($owner_since): ?> <span class="cp-profile-since">· na garagem desde <?= e(date('Y', strtotime($owner_since))) ?></span><?php endif; ?>
+        </div>
+        <?php if ($owner['bio']): ?>
+            <p class="cp-profile-bio"><?= e($owner['bio']) ?></p>
+        <?php endif; ?>
+    </div>
+</section>
 
-<?php
-$has_active_filters = array_filter(array_intersect_key(
-    $filters, array_flip(['manufacturer','scale','category_id','condition','location','search','tag_id'])
-));
-?>
+<!-- Estatísticas da garagem ──────────────────────────────────────────── -->
+<div class="cp-stats">
+    <div class="cp-stat">
+        <span class="cp-stat-num"><?= number_format($collection_total) ?></span>
+        <span class="cp-stat-lbl">peça<?= $collection_total !== 1 ? 's' : '' ?></span>
+    </div>
+    <div class="cp-stat">
+        <span class="cp-stat-num"><?= number_format(count($manufacturers)) ?></span>
+        <span class="cp-stat-lbl">fabricante<?= count($manufacturers) !== 1 ? 's' : '' ?></span>
+    </div>
+    <div class="cp-stat">
+        <span class="cp-stat-num"><?= number_format(count($scales)) ?></span>
+        <span class="cp-stat-lbl">escala<?= count($scales) !== 1 ? 's' : '' ?></span>
+    </div>
+    <?php if ($featured_total > 0): ?>
+    <div class="cp-stat">
+        <span class="cp-stat-num"><?= number_format($featured_total) ?></span>
+        <span class="cp-stat-lbl">destaque<?= $featured_total !== 1 ? 's' : '' ?></span>
+    </div>
+    <?php endif; ?>
+</div>
+</div><!-- /#cpAbout -->
+
+<!-- Filtros (colapsados; abrem expandidos se houver filtro ativo) ──────── -->
+<div id="cpFilters" class="cp-collapse <?= $open_filters ? 'is-open' : '' ?>">
+<!-- Barra de exploração ────────────────────────────────────────────── -->
+<form method="get" class="cp-explore">
+    <input type="hidden" name="about" id="hidAbout" value="1"<?= $open_about ? '' : ' disabled' ?>>
+    <input type="hidden" name="filters" id="hidFilters" value="1"<?= $open_filters ? '' : ' disabled' ?>>
+    <div class="cp-explore-search">
+        <i class="fa fa-magnifying-glass"></i>
+        <input type="search" name="search" class="cp-field cp-search-input"
+               placeholder="Buscar nesta coleção..."
+               value="<?= e($filters['search']) ?>">
+    </div>
+    <div class="cp-explore-controls">
+        <select name="manufacturer" class="cp-field cp-select">
+            <option value="">Fabricante</option>
+            <?php foreach ($manufacturers as $m): ?>
+                <option value="<?= e($m) ?>" <?= $filters['manufacturer'] === $m ? 'selected' : '' ?>><?= e($m) ?></option>
+            <?php endforeach; ?>
+        </select>
+        <select name="scale" class="cp-field cp-select">
+            <option value="">Escala</option>
+            <?php foreach ($scales as $s): ?>
+                <option value="<?= e($s) ?>" <?= $filters['scale'] === $s ? 'selected' : '' ?>><?= e($s) ?></option>
+            <?php endforeach; ?>
+        </select>
+        <select name="category_id" class="cp-field cp-select">
+            <option value="">Categoria</option>
+            <?php foreach ($categories as $cat): ?>
+                <option value="<?= $cat['id'] ?>" <?= (int)($filters['category_id'] ?? 0) === (int)$cat['id'] ? 'selected' : '' ?>><?= e($cat['name']) ?></option>
+            <?php endforeach; ?>
+        </select>
+        <select name="condition" class="cp-field cp-select">
+            <option value="">Embalagem</option>
+            <option value="sealed" <?= ($filters['condition'] ?? '') === 'sealed' ? 'selected' : '' ?>>Lacrada</option>
+            <option value="open"   <?= ($filters['condition'] ?? '') === 'open'   ? 'selected' : '' ?>>Aberta</option>
+            <option value="no_box" <?= ($filters['condition'] ?? '') === 'no_box' ? 'selected' : '' ?>>Sem caixa</option>
+        </select>
+        <select name="location" class="cp-field cp-select">
+            <option value="">Local</option>
+            <option value="storage" <?= ($filters['location'] ?? '') === 'storage' ? 'selected' : '' ?>>Armazenada</option>
+            <option value="display" <?= ($filters['location'] ?? '') === 'display' ? 'selected' : '' ?>>Exposição</option>
+        </select>
+        <select name="sort" class="cp-field cp-select">
+            <option value="" <?= $filters['sort'] === '' ? 'selected' : '' ?>>Mais relevantes</option>
+            <option value="recent" <?= $filters['sort'] === 'recent' ? 'selected' : '' ?>>Mais recente</option>
+            <option value="name" <?= $filters['sort'] === 'name' ? 'selected' : '' ?>>Nome A–Z</option>
+            <option value="manufacturer" <?= $filters['sort'] === 'manufacturer' ? 'selected' : '' ?>>Fabricante</option>
+            <option value="year_desc" <?= $filters['sort'] === 'year_desc' ? 'selected' : '' ?>>Ano (novo→antigo)</option>
+            <option value="year_asc" <?= $filters['sort'] === 'year_asc' ? 'selected' : '' ?>>Ano (antigo→novo)</option>
+        </select>
+        <button type="submit" class="cp-btn cp-btn-primary" title="Aplicar"><i class="fa fa-arrow-right"></i></button>
+        <a href="<?= $clear_url ?>" class="cp-btn cp-btn-ghost" data-cp-nav title="Limpar"><i class="fa fa-rotate-left"></i></a>
+    </div>
+    <?php if (!empty($tags)):
+        $tag_qs_base = $panel_qs;
+        foreach (['manufacturer','scale','category_id','condition','location','search','sort'] as $k) {
+            if (!empty($filters[$k])) $tag_qs_base[$k] = $filters[$k];
+        }
+        $tag_qs_str   = $base_url . ($tag_qs_base ? '?' . http_build_query($tag_qs_base) . '&' : '?');
+        $tag_qs_clear = $base_url . ($tag_qs_base ? '?' . http_build_query($tag_qs_base) : '');
+    ?>
+    <div class="cp-chips">
+        <a href="<?= $tag_qs_clear ?>" class="cp-chip <?= !$filters['tag_id'] ? 'is-active' : '' ?>" data-cp-nav>Todas</a>
+        <?php foreach ($tags as $tag): ?>
+            <a href="<?= $tag_qs_str ?>tag_id=<?= $tag['id'] ?>"
+               class="cp-chip <?= (int)($filters['tag_id'] ?? 0) === (int)$tag['id'] ? 'is-active' : '' ?>" data-cp-nav>
+                <?= e($tag['name']) ?>
+            </a>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+</form>
+</div><!-- /#cpFilters -->
+
 <?php if (empty($miniatures)): ?>
-    <div class="text-center text-secondary py-5">
-        <i class="fa fa-car fa-3x mb-3 opacity-25 d-block"></i>
+    <div class="cp-empty">
         <?php if ($has_active_filters): ?>
-            <p class="h5 mb-3">Nenhuma miniatura encontrada para esses filtros.</p>
-            <a href="<?= $base_url ?>" class="btn btn-outline-warning btn-sm"><i class="fa fa-times me-1"></i>Limpar filtros</a>
+            <i class="fa fa-filter-circle-xmark cp-empty-icon d-block"></i>
+            <h2 class="cp-empty-title">Nada encontrado nesses filtros</h2>
+            <p class="cp-empty-text">Tente afrouxar a busca ou explorar a coleção inteira.</p>
+            <a href="<?= $clear_url ?>" class="cp-btn cp-btn-primary" data-cp-nav><i class="fa fa-rotate-left me-2"></i>Limpar filtros</a>
         <?php else: ?>
-            <p class="h5">A coleção ainda não tem miniaturas públicas.</p>
+            <i class="fa fa-warehouse cp-empty-icon d-block"></i>
+            <h2 class="cp-empty-title">Garagem ainda vazia</h2>
+            <p class="cp-empty-text">Esta coleção ainda não tem miniaturas públicas. Volte em breve.</p>
         <?php endif; ?>
     </div>
 <?php else: ?>
-    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-5 g-3" id="miniGrid">
-        <?php foreach ($miniatures as $mini): ?>
-            <div class="col">
-                <a href="<?= e(mini_url($mini)) ?>" class="text-decoration-none">
-                    <div class="card h-100 mini-card bg-dark border-secondary">
-                        <div class="mini-card-img-wrap position-relative">
-                            <img src="<?= e(thumb_url($mini['primary_photo'])) ?>"
-                                 data-fallback="<?= e(photo_url($mini['primary_photo'])) ?>"
-                                 alt="<?= e($mini['name']) ?>"
-                                 class="card-img-top mini-thumb"
-                                 loading="lazy">
-                            <?php if ((int)$mini['photo_count'] > 1): ?>
-                                <span class="position-absolute bottom-0 end-0 m-1 badge bg-dark bg-opacity-75" style="font-size:.65rem;">
-                                    <i class="fa fa-images me-1"></i><?= $mini['photo_count'] ?>
-                                </span>
-                            <?php endif; ?>
-                        </div>
-                        <div class="card-body p-2">
-                            <div class="mini-manufacturer text-warning small mb-1"><?= e($mini['manufacturer']) ?></div>
-                            <div class="mini-name text-light fw-semibold small"><?= e($mini['name']) ?></div>
+    <?php
+    // Tags da página atual em uma única query (sem N+1, sem alterar schema).
+    $cp_tags_map = [];
+    $cp_ids = array_map(fn($m) => (int) $m['id'], $miniatures);
+    if ($cp_ids) {
+        try {
+            $cp_in = implode(',', array_fill(0, count($cp_ids), '?'));
+            $st = db()->prepare("SELECT mt.miniature_id, t.name
+                                 FROM miniature_tags mt
+                                 JOIN tags t ON t.id = mt.tag_id
+                                 WHERE mt.miniature_id IN ($cp_in)
+                                 ORDER BY t.name ASC");
+            $st->execute($cp_ids);
+            foreach ($st->fetchAll() as $r) {
+                $cp_tags_map[(int) $r['miniature_id']][] = $r['name'];
+            }
+        } catch (\Throwable $e) { /* tags são opcionais */ }
+    }
+    ?>
+    <div class="cp-gridbar">
+        <span class="cp-gridbar-count">
+            <?= number_format($total) ?> <?= $total !== 1 ? 'resultados' : 'resultado' ?><?php if ($has_active_filters): ?> · <a href="<?= $clear_url ?>" class="cp-clear" data-cp-nav>limpar filtros</a><?php endif; ?>
+        </span>
+        <div class="cp-viewtoggle" role="group" aria-label="Visualização">
+            <button id="viewGrid" class="cp-view-btn is-active" title="Grade"><i class="fa fa-grip"></i></button>
+            <button id="viewList" class="cp-view-btn" title="Lista"><i class="fa fa-list"></i></button>
+        </div>
+    </div>
+    <div class="row row-cols-2 row-cols-md-3 row-cols-xl-4 g-3 cp-grid" id="miniGrid">
+        <?php $cp_i = 0; foreach ($miniatures as $mini):
+            $cp_cond  = $mini['condition'] ?? 'sealed';
+            $cp_mtags = array_slice($cp_tags_map[(int) $mini['id']] ?? [], 0, 2);
+        ?>
+            <div class="col lp-animate" style="--lp-delay:<?= number_format(($cp_i++ % 10) * 0.04, 2) ?>s">
+                <a href="<?= e(mini_url($mini)) ?>" class="cp-card">
+                    <div class="cp-card-photo">
+                        <img src="<?= e(thumb_url($mini['primary_photo'])) ?>"
+                             data-fallback="<?= e(photo_url($mini['primary_photo'])) ?>"
+                             alt="<?= e($mini['name']) ?>"
+                             class="cp-card-img"
+                             loading="lazy">
+                        <?php if (!empty($mini['is_featured'])): ?>
+                            <span class="cp-card-star" title="Destaque"><i class="fa fa-star"></i></span>
+                        <?php endif; ?>
+                        <?php if ((int) $mini['photo_count'] > 1): ?>
+                            <span class="cp-card-photos"><i class="fa fa-images"></i><?= (int) $mini['photo_count'] ?></span>
+                        <?php endif; ?>
+                    </div>
+                    <div class="cp-card-info">
+                        <?php if ($mini['manufacturer']): ?>
+                            <div class="cp-card-maker"><?= e($mini['manufacturer']) ?></div>
+                        <?php endif; ?>
+                        <div class="cp-card-name"><?= e($mini['name']) ?></div>
+                        <div class="cp-card-pills">
                             <?php if ($mini['scale']): ?>
-                                <div class="text-secondary" style="font-size:.75rem"><?= e($mini['scale']) ?></div>
+                                <span class="cp-pill cp-pill-soft"><?= e($mini['scale']) ?></span>
                             <?php endif; ?>
-                            <div class="mt-1"><?= mini_status_badges($mini) ?></div>
+                            <span class="cp-pill cp-cond-<?= e($cp_cond) ?>"><?= h(condition_label($cp_cond)) ?></span>
+                            <?php foreach ($cp_mtags as $tn): ?>
+                                <span class="cp-pill cp-pill-tag">#<?= e($tn) ?></span>
+                            <?php endforeach; ?>
                         </div>
                     </div>
                 </a>
@@ -197,7 +325,7 @@ $has_active_filters = array_filter(array_intersect_key(
 <?php endif; ?>
 
 <?php if ($total_pages > 1):
-    $qs_parts = [];
+    $qs_parts = $panel_qs;
     foreach (['manufacturer','scale','category_id','condition','location','search','tag_id','sort'] as $k) {
         if (!empty($filters[$k])) $qs_parts[$k] = $filters[$k];
     }
@@ -207,7 +335,7 @@ $has_active_filters = array_filter(array_intersect_key(
 <nav class="mt-4" aria-label="Paginação">
     <ul class="pagination pagination-sm justify-content-center flex-wrap">
         <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
-            <a class="page-link bg-dark border-secondary text-light" href="<?= $base_url . $qs_base ?>page=<?= $page - 1 ?>">&laquo;</a>
+            <a class="page-link bg-dark border-secondary text-light" data-cp-nav href="<?= $base_url . $qs_base ?>page=<?= $page - 1 ?>">&laquo;</a>
         </li>
         <?php foreach ($pages as $p): ?>
             <?php if ($p === null): ?>
@@ -215,12 +343,12 @@ $has_active_filters = array_filter(array_intersect_key(
             <?php else: ?>
                 <li class="page-item <?= $p === $page ? 'active' : '' ?>">
                     <a class="page-link <?= $p === $page ? 'bg-warning border-warning text-dark' : 'bg-dark border-secondary text-light' ?>"
-                       href="<?= $base_url . $qs_base ?>page=<?= $p ?>"><?= $p ?></a>
+                       data-cp-nav href="<?= $base_url . $qs_base ?>page=<?= $p ?>"><?= $p ?></a>
                 </li>
             <?php endif; ?>
         <?php endforeach; ?>
         <li class="page-item <?= $page >= $total_pages ? 'disabled' : '' ?>">
-            <a class="page-link bg-dark border-secondary text-light" href="<?= $base_url . $qs_base ?>page=<?= $page + 1 ?>">&raquo;</a>
+            <a class="page-link bg-dark border-secondary text-light" data-cp-nav href="<?= $base_url . $qs_base ?>page=<?= $page + 1 ?>">&raquo;</a>
         </li>
     </ul>
 </nav>
@@ -234,22 +362,62 @@ $has_active_filters = array_filter(array_intersect_key(
     const btnList = document.getElementById('viewList');
     if (!grid) return;
     const KEY = 'g64_view';
+    const COLS = ['row-cols-2', 'row-cols-md-3', 'row-cols-xl-4'];
     function setView(v) {
         if (v === 'list') {
-            grid.classList.add('view-list');
-            grid.classList.replace('row-cols-2','row-cols-1');
-            btnList.classList.replace('btn-outline-secondary','btn-warning');
-            btnGrid.classList.replace('btn-warning','btn-outline-secondary');
+            COLS.forEach(function (c) { grid.classList.remove(c); });
+            grid.classList.add('view-list', 'row-cols-1');
+            btnList.classList.add('is-active');
+            btnGrid.classList.remove('is-active');
         } else {
-            grid.classList.remove('view-list','row-cols-1');
-            grid.classList.add('row-cols-2','row-cols-md-3','row-cols-lg-4','row-cols-xl-5');
-            btnGrid.classList.replace('btn-outline-secondary','btn-warning');
-            btnList.classList.replace('btn-warning','btn-outline-secondary');
+            grid.classList.remove('view-list', 'row-cols-1');
+            COLS.forEach(function (c) { grid.classList.add(c); });
+            btnGrid.classList.add('is-active');
+            btnList.classList.remove('is-active');
         }
         localStorage.setItem(KEY, v);
     }
     setView(localStorage.getItem(KEY) || 'grid');
     btnGrid.addEventListener('click', () => setView('grid'));
     btnList.addEventListener('click', () => setView('list'));
+})();
+</script>
+<script>
+(function () {
+    const aboutPanel = document.getElementById('cpAbout');
+    const filtersPanel = document.getElementById('cpFilters');
+    const hidAbout = document.getElementById('hidAbout');
+    const hidFilters = document.getElementById('hidFilters');
+
+    function isOpen(p) { return !!(p && p.classList.contains('is-open')); }
+
+    function sync() {
+        const a = isOpen(aboutPanel);
+        const f = isOpen(filtersPanel);
+        if (hidAbout) hidAbout.disabled = !a;
+        if (hidFilters) hidFilters.disabled = !f;
+        document.querySelectorAll('[data-cp-nav]').forEach(function (link) {
+            try {
+                const u = new URL(link.getAttribute('href'), window.location.href);
+                if (a) u.searchParams.set('about', '1'); else u.searchParams.delete('about');
+                if (f) u.searchParams.set('filters', '1'); else u.searchParams.delete('filters');
+                link.setAttribute('href', u.pathname + u.search);
+            } catch (e) { /* ignora links inválidos */ }
+        });
+    }
+
+    function wire(btnId, panel) {
+        const btn = document.getElementById(btnId);
+        if (!btn || !panel) return;
+        btn.addEventListener('click', function () {
+            const open = panel.classList.toggle('is-open');
+            btn.classList.toggle('is-open', open);
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            sync();
+        });
+    }
+    wire('btnAbout', aboutPanel);
+    wire('btnFilters', filtersPanel);
+    sync();
 })();
 </script>

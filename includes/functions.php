@@ -179,7 +179,8 @@ function get_miniatures(array $filters = []): array {
         'manufacturer' => 'm.manufacturer ASC, m.name ASC',
         'year_asc'     => 'm.year ASC, m.name ASC',
         'year_desc'    => 'm.year DESC, m.name ASC',
-        default        => 'm.is_featured DESC, m.sort_order ASC, m.created_at DESC',
+        'recent'       => 'm.created_at DESC',
+        default        => 'm.is_featured DESC, m.sort_order ASC',
     };
 
     foreach ($use_ft ? [true, false] : [false] as $ft) {
