@@ -10,11 +10,18 @@
     <link rel="stylesheet" href="<?= h(APP_URL) ?>/assets/css/style.css">
 </head>
 <body class="admin-layout">
+<?php $unread_notifs = get_unread_notifications_count(current_user_id()); ?>
 
 <!-- Mobile topbar -->
 <header class="admin-topbar d-lg-none">
     <a class="admin-topbar-brand" href="<?= h(APP_URL) ?>/admin/">
         <i class="fa fa-garage me-2"></i><?= h(APP_NAME) ?>
+    </a>
+    <a class="admin-topbar-bell position-relative me-2" href="<?= h(APP_URL) ?>/admin/notifications" aria-label="Notificações">
+        <i class="fa fa-bell"></i>
+        <?php if ($unread_notifs > 0): ?>
+            <span class="badge rounded-pill bg-warning text-dark position-absolute top-0 start-100 translate-middle"><?= $unread_notifs > 99 ? '99+' : (int) $unread_notifs ?></span>
+        <?php endif; ?>
     </a>
     <button class="admin-sidebar-toggle" id="sidebarToggle" aria-label="Menu">
         <i class="fa fa-bars"></i>
@@ -45,6 +52,12 @@
         </a>
         <a href="<?= h(APP_URL) ?>/admin/wishlist" class="admin-nav-link <?= $is('wishlist.php') ?>">
             <i class="fa fa-heart"></i>Wishlist
+        </a>
+        <a href="<?= h(APP_URL) ?>/admin/notifications" class="admin-nav-link <?= $is('notifications.php') ?>">
+            <i class="fa fa-bell"></i>Notificações
+            <?php if ($unread_notifs > 0): ?>
+                <span class="badge rounded-pill bg-warning text-dark ms-2"><?= $unread_notifs > 99 ? '99+' : (int) $unread_notifs ?></span>
+            <?php endif; ?>
         </a>
 
         <div class="admin-nav-section">Configurações</div>

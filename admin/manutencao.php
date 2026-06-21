@@ -114,6 +114,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
         'idx_miniatures_manufacturer'  => ['miniatures',       'CREATE INDEX idx_miniatures_manufacturer ON miniatures (manufacturer)'],
         'idx_miniatures_scale'         => ['miniatures',       'CREATE INDEX idx_miniatures_scale ON miniatures (scale)'],
         'ft_miniatures_search'         => ['miniatures',       'ALTER TABLE miniatures ADD FULLTEXT INDEX ft_miniatures_search (name, manufacturer, model)'],
+        'idx_comments_parent'          => ['miniature_comments', 'CREATE INDEX idx_comments_parent ON miniature_comments (parent_id)'],
+        'idx_comments_pinned'          => ['miniature_comments', 'CREATE INDEX idx_comments_pinned ON miniature_comments (miniature_id, is_pinned, created_at)'],
     ];
 
     // Schema migrations (column additions) — ['table', 'column', 'sql']
@@ -136,6 +138,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
         'au_bio'           => ['admin_users', 'bio',            "ALTER TABLE admin_users ADD COLUMN bio TEXT DEFAULT NULL"],
         'au_avatar'        => ['admin_users', 'avatar',         "ALTER TABLE admin_users ADD COLUMN avatar VARCHAR(255) DEFAULT NULL"],
         'au_is_featured'   => ['admin_users', 'is_featured',    "ALTER TABLE admin_users ADD COLUMN is_featured TINYINT(1) NOT NULL DEFAULT 0"],
+        'cmt_parent_id'    => ['miniature_comments', 'parent_id', "ALTER TABLE miniature_comments ADD COLUMN parent_id INT UNSIGNED NULL DEFAULT NULL AFTER user_id"],
+        'cmt_is_pinned'    => ['miniature_comments', 'is_pinned', "ALTER TABLE miniature_comments ADD COLUMN is_pinned TINYINT(1) NOT NULL DEFAULT 0 AFTER body"],
     ];
 
     // Table migrations — checked via information_schema.tables
@@ -148,6 +152,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE KEY uq_mini_ip (miniature_id, ip_hash),
             FOREIGN KEY (miniature_id) REFERENCES miniatures(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'miniature_comments' => "CREATE TABLE miniature_comments (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            miniature_id INT UNSIGNED NOT NULL,
+            user_id INT UNSIGNED NOT NULL,
+            body TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_comments_mini_created (miniature_id, created_at),
+            KEY idx_comments_user (user_id),
+            FOREIGN KEY (miniature_id) REFERENCES miniatures(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'notifications' => "CREATE TABLE notifications (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_id INT UNSIGNED NOT NULL,
+            actor_user_id INT UNSIGNED NOT NULL,
+            type ENUM('comment','reply','mention') NOT NULL,
+            miniature_id INT UNSIGNED NOT NULL,
+            comment_id INT UNSIGNED NULL,
+            target_url VARCHAR(255) NOT NULL,
+            is_read TINYINT(1) NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_notif_user_unread (user_id, is_read, created_at),
+            KEY idx_notif_miniature (miniature_id),
+            KEY idx_notif_comment (comment_id),
+            FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE,
+            FOREIGN KEY (actor_user_id) REFERENCES admin_users(id) ON DELETE CASCADE,
+            FOREIGN KEY (miniature_id) REFERENCES miniatures(id) ON DELETE CASCADE,
+            FOREIGN KEY (comment_id) REFERENCES miniature_comments(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     ];
     $check_table = db()->prepare(

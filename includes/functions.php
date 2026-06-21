@@ -621,6 +621,15 @@ function location_label(string $l): string {
     };
 }
 
+/** Shorter location label for compact public UI (e.g. spec cards). */
+function location_label_short(string $l): string {
+    return match ($l) {
+        'display' => 'Exposta',
+        'storage' => 'Armazenada',
+        default   => location_label($l),
+    };
+}
+
 function location_badge(string $l): string {
     $class = match ($l) {
         'display' => 'info',
@@ -742,4 +751,409 @@ function get_recent_miniatures(int $limit = 5): array {
     );
     $stmt->execute([$limit]);
     return $stmt->fetchAll();
+}
+
+// ─── Comments (social module — Phases 1-3) ───────────────────────────────────
+
+const COMMENT_MAX_LENGTH = 1000;
+
+/**
+ * Returns root comments for a miniature, each with a `replies` array of direct
+ * answers (single-level thread). Pinned roots come first, then the rest; within
+ * each group the most recent comes first. Replies stay in chronological order.
+ * Orphaned replies (whose root was deleted) are promoted to roots.
+ */
+function get_miniature_comments(int $miniature_id): array {
+    try {
+        $stmt = db()->prepare(
+            'SELECT c.id, c.miniature_id, c.user_id, c.parent_id, c.body, c.is_pinned, c.created_at,
+                    u.display_name, u.username, u.slug
+             FROM miniature_comments c
+             JOIN admin_users u ON u.id = c.user_id
+             WHERE c.miniature_id = ?
+             ORDER BY c.created_at ASC, c.id ASC'
+        );
+        $stmt->execute([$miniature_id]);
+        $rows = $stmt->fetchAll();
+    } catch (Throwable $e) {
+        return []; // table/column may not exist before migration
+    }
+
+    $roots    = [];
+    $children = [];
+    foreach ($rows as $r) {
+        if (empty($r['parent_id'])) {
+            $r['replies'] = [];
+            $roots[(int) $r['id']] = $r;
+        } else {
+            $children[(int) $r['parent_id']][] = $r;
+        }
+    }
+    foreach ($children as $pid => $kids) {
+        if (isset($roots[$pid])) {
+            $roots[$pid]['replies'] = $kids;
+        }
+        // Orphaned replies (parent missing) are dropped, never promoted to roots.
+    }
+
+    $list = array_values($roots);
+    usort($list, function (array $a, array $b): int {
+        $pa = (int) ($a['is_pinned'] ?? 0);
+        $pb = (int) ($b['is_pinned'] ?? 0);
+        if ($pa !== $pb) return $pb <=> $pa;                  // pinned first
+        $cmp = strcmp((string) $b['created_at'], (string) $a['created_at']); // newest first
+        return $cmp !== 0 ? $cmp : ($b['id'] <=> $a['id']);
+    });
+    return $list;
+}
+
+/** Fetches a single comment row, or null. */
+function get_miniature_comment(int $comment_id): ?array {
+    try {
+        $stmt = db()->prepare('SELECT * FROM miniature_comments WHERE id = ? LIMIT 1');
+        $stmt->execute([$comment_id]);
+        return $stmt->fetch() ?: null;
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/**
+ * Creates a comment or a reply. Validates: logged-in user, non-empty after trim,
+ * max length enforced in the application. No HTML is stored (raw text only).
+ *
+ * Threads are single-level: if $parent_id points to a reply, the new comment is
+ * re-attached to that reply's root, never nested deeper.
+ *
+ * Returns true on success, false on validation/DB failure.
+ */
+function create_miniature_comment(int $miniature_id, int $user_id, string $body, ?int $parent_id = null): bool {
+    if ($user_id <= 0) return false;
+    $body = trim($body);
+    if ($body === '') return false;
+    if (mb_strlen($body) > COMMENT_MAX_LENGTH) return false;
+
+    $root_parent = null;
+    if ($parent_id !== null && $parent_id > 0) {
+        $parent = get_miniature_comment($parent_id);
+        // Parent must exist and belong to the same miniature.
+        if (!$parent || (int) $parent['miniature_id'] !== $miniature_id) return false;
+        // Enforce single-level threads: attach to the root, never to a reply.
+        $root_parent = !empty($parent['parent_id']) ? (int) $parent['parent_id'] : (int) $parent['id'];
+    }
+
+    try {
+        $stmt = db()->prepare(
+            'INSERT INTO miniature_comments (miniature_id, user_id, body, parent_id) VALUES (?, ?, ?, ?)'
+        );
+        $ok = $stmt->execute([$miniature_id, $user_id, $body, $root_parent]);
+        if (!$ok) return false;
+        $comment_id = (int) db()->lastInsertId();
+        // Best-effort: generate notifications. Never let this block the comment.
+        try {
+            create_comment_notifications($comment_id, $miniature_id, $user_id, $root_parent, $body);
+        } catch (Throwable $e) { /* ignore notification failures */ }
+        return true;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+/**
+ * Permission check for deleting a comment:
+ * - the comment author
+ * - the owner of the miniature
+ * - a superadmin
+ */
+function can_delete_miniature_comment(array $comment, array $miniature): bool {
+    $uid = current_user_id();
+    if ($uid <= 0) return false;
+    if ((int) $comment['user_id'] === $uid) return true;
+    if ((int) ($miniature['user_id'] ?? 0) === $uid) return true;
+    return is_superadmin();
+}
+
+/**
+ * Deletes a comment if $deleted_by is allowed to.
+ * - Deleting a root comment also deletes all of its replies (atomically).
+ * - Deleting a reply removes only that reply.
+ * Returns true on success, false if not found or not permitted.
+ */
+function delete_miniature_comment(int $comment_id, int $deleted_by): bool {
+    if ($deleted_by <= 0) return false;
+    $comment = get_miniature_comment($comment_id);
+    if (!$comment) return false;
+    $miniature = get_miniature((int) $comment['miniature_id']);
+    if (!$miniature) return false;
+    if (!can_delete_miniature_comment($comment, $miniature)) return false;
+
+    $is_root = empty($comment['parent_id']);
+    $pdo = db();
+    try {
+        $pdo->beginTransaction();
+        if ($is_root) {
+            // Remove all replies first, then the root comment.
+            $pdo->prepare('DELETE FROM miniature_comments WHERE parent_id = ?')->execute([$comment_id]);
+        }
+        $pdo->prepare('DELETE FROM miniature_comments WHERE id = ?')->execute([$comment_id]);
+        $pdo->commit();
+        return true;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        return false;
+    }
+}
+
+/**
+ * Permission check for pinning (highlighting) a comment:
+ * - only the owner of the miniature or a superadmin
+ * - only root comments can be pinned (never replies)
+ */
+function can_pin_miniature_comment(array $comment, array $miniature): bool {
+    $uid = current_user_id();
+    if ($uid <= 0) return false;
+    if (!empty($comment['parent_id'])) return false; // replies are never pinnable
+    if ((int) ($miniature['user_id'] ?? 0) === $uid) return true;
+    return is_superadmin();
+}
+
+/**
+ * Toggles the pinned flag of a root comment if $user_id is allowed to.
+ * Replies cannot be pinned. Returns true on success, false otherwise.
+ */
+function toggle_miniature_comment_pin(int $comment_id, int $user_id): bool {
+    if ($user_id <= 0) return false;
+    $comment = get_miniature_comment($comment_id);
+    if (!$comment) return false;
+    if (!empty($comment['parent_id'])) return false; // never pin a reply
+    $miniature = get_miniature((int) $comment['miniature_id']);
+    if (!$miniature) return false;
+    if (!can_pin_miniature_comment($comment, $miniature)) return false;
+    try {
+        $new = empty($comment['is_pinned']) ? 1 : 0;
+        return db()->prepare('UPDATE miniature_comments SET is_pinned = ? WHERE id = ?')
+                    ->execute([$new, $comment_id]);
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+/**
+ * Renders a raw comment body as safe HTML, turning @slug mentions of existing,
+ * non-banned users into links to their public profile (/u/{slug}).
+ *
+ * Security: the whole body is HTML-escaped first (no user HTML is ever trusted);
+ * mention slugs are validated against the database (whitelist) and contain only
+ * [a-z0-9_-], so they are safe in both the href and the link text.
+ *
+ * Performance: all candidate slugs are resolved in a single `WHERE slug IN (...)`
+ * query — the replace callback only reads an in-memory map (no N+1).
+ */
+function render_comment_body_with_mentions(string $body): string {
+    $pattern = '/(?<![\w@])@([a-z0-9_-]+)/i';
+
+    // 1. Collect unique candidate slugs (lowercased) from the raw text.
+    $valid = [];
+    if (preg_match_all($pattern, $body, $m) && !empty($m[1])) {
+        $candidates = array_values(array_unique(array_map('strtolower', $m[1])));
+        try {
+            $in   = implode(',', array_fill(0, count($candidates), '?'));
+            $stmt = db()->prepare("SELECT slug FROM admin_users WHERE is_banned = 0 AND slug IN ($in)");
+            $stmt->execute($candidates);
+            foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $s) {
+                $valid[strtolower((string) $s)] = true;
+            }
+        } catch (Throwable $e) {
+            $valid = [];
+        }
+    }
+
+    // 2. Escape the entire body first — neutralises any HTML the user typed.
+    $html = e($body);
+
+    // 3. Convert only validated mentions into links (slug chars are escape-safe).
+    if ($valid) {
+        $html = preg_replace_callback(
+            $pattern,
+            function (array $mm) use ($valid): string {
+                $raw  = $mm[1];
+                $slug = strtolower($raw);
+                if (empty($valid[$slug])) {
+                    return '@' . $raw; // unknown slug — keep as plain text
+                }
+                return '<a href="/u/' . $slug . '" class="cm-mention">@' . $raw . '</a>';
+            },
+            $html
+        );
+    }
+
+    // 4. Preserve line breaks.
+    return nl2br($html);
+}
+
+// ─── Notifications (social module — Phase 5A) ────────────────────────────────
+
+/**
+ * Returns the distinct, existing, non-banned users mentioned (@slug) in a body.
+ * Single `WHERE slug IN (...)` query — no N+1. Each row has id + slug.
+ */
+function get_mentioned_users_from_comment_body(string $body): array {
+    if (!preg_match_all('/(?<![\w@])@([a-z0-9_-]+)/i', $body, $m) || empty($m[1])) {
+        return [];
+    }
+    $candidates = array_values(array_unique(array_map('strtolower', $m[1])));
+    try {
+        $in   = implode(',', array_fill(0, count($candidates), '?'));
+        $stmt = db()->prepare("SELECT id, slug FROM admin_users WHERE is_banned = 0 AND slug IN ($in)");
+        $stmt->execute($candidates);
+        return $stmt->fetchAll();
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+/**
+ * Inserts a single notification.
+ * - never notifies the actor themselves
+ * - skips duplicates of the same type for the same comment + recipient
+ * Returns true on insert, false otherwise.
+ */
+function create_notification(
+    int $user_id,
+    int $actor_user_id,
+    string $type,
+    int $miniature_id,
+    ?int $comment_id,
+    string $target_url
+): bool {
+    if ($user_id <= 0 || $actor_user_id <= 0) return false;
+    if ($user_id === $actor_user_id) return false; // no self-notification
+    if (!in_array($type, ['comment', 'reply', 'mention'], true)) return false;
+    try {
+        // Avoid duplicate notifications of the same type for the same comment.
+        if ($comment_id !== null) {
+            $chk = db()->prepare(
+                'SELECT 1 FROM notifications WHERE user_id = ? AND type = ? AND comment_id = ? LIMIT 1'
+            );
+            $chk->execute([$user_id, $type, $comment_id]);
+            if ($chk->fetchColumn()) return false;
+        }
+        $stmt = db()->prepare(
+            'INSERT INTO notifications (user_id, actor_user_id, type, miniature_id, comment_id, target_url)
+             VALUES (?, ?, ?, ?, ?, ?)'
+        );
+        return $stmt->execute([$user_id, $actor_user_id, $type, $miniature_id, $comment_id, $target_url]);
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+/**
+ * Generates the notifications triggered by a newly created comment/reply:
+ * - root comment  → 'comment' to the miniature owner
+ * - reply         → 'reply' to the author of the root comment
+ * - @slug mentions→ 'mention' to each mentioned user
+ * The actor is never notified (enforced in create_notification).
+ */
+function create_comment_notifications(
+    int $comment_id,
+    int $miniature_id,
+    int $actor_user_id,
+    ?int $parent_id,
+    string $body
+): void {
+    $miniature = get_miniature($miniature_id);
+    if (!$miniature) return;
+
+    $target_url = mini_url($miniature) . '#comment-' . $comment_id;
+
+    if ($parent_id === null || $parent_id <= 0) {
+        // Root comment → notify the miniature owner.
+        create_notification(
+            (int) $miniature['user_id'], $actor_user_id, 'comment',
+            $miniature_id, $comment_id, $target_url
+        );
+    } else {
+        // Reply → notify the author of the root comment.
+        $root = get_miniature_comment($parent_id);
+        if ($root) {
+            create_notification(
+                (int) $root['user_id'], $actor_user_id, 'reply',
+                $miniature_id, $comment_id, $target_url
+            );
+        }
+    }
+
+    // Mentions → notify each mentioned, existing user (separate from comment/reply).
+    foreach (get_mentioned_users_from_comment_body($body) as $u) {
+        create_notification(
+            (int) $u['id'], $actor_user_id, 'mention',
+            $miniature_id, $comment_id, $target_url
+        );
+    }
+}
+
+/** Number of unread notifications for a user. */
+function get_unread_notifications_count(int $user_id): int {
+    if ($user_id <= 0) return 0;
+    try {
+        $stmt = db()->prepare(
+            'SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0'
+        );
+        $stmt->execute([$user_id]);
+        return (int) $stmt->fetchColumn();
+    } catch (Throwable $e) {
+        return 0;
+    }
+}
+
+/**
+ * Returns a user's notifications (unread first, then newest first) with the
+ * actor's display info and the miniature name. Single query — no N+1.
+ */
+function get_user_notifications(int $user_id, int $limit = 50): array {
+    if ($user_id <= 0) return [];
+    $limit = max(1, min(100, $limit));
+    try {
+        $stmt = db()->prepare(
+            'SELECT n.id, n.user_id, n.actor_user_id, n.type, n.miniature_id, n.comment_id,
+                    n.target_url, n.is_read, n.created_at,
+                    a.display_name AS actor_name, a.username AS actor_username, a.slug AS actor_slug,
+                    m.name AS miniature_name
+             FROM notifications n
+             JOIN admin_users a ON a.id = n.actor_user_id
+             LEFT JOIN miniatures m ON m.id = n.miniature_id
+             WHERE n.user_id = ?
+             ORDER BY n.is_read ASC, n.created_at DESC
+             LIMIT ' . $limit
+        );
+        $stmt->execute([$user_id]);
+        return $stmt->fetchAll();
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+/** Marks a single notification as read, scoped to its owner. */
+function mark_notification_read(int $notification_id, int $user_id): bool {
+    if ($notification_id <= 0 || $user_id <= 0) return false;
+    try {
+        return db()->prepare(
+            'UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?'
+        )->execute([$notification_id, $user_id]);
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+/** Marks all of a user's unread notifications as read. */
+function mark_all_notifications_read(int $user_id): bool {
+    if ($user_id <= 0) return false;
+    try {
+        return db()->prepare(
+            'UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0'
+        )->execute([$user_id]);
+    } catch (Throwable $e) {
+        return false;
+    }
 }

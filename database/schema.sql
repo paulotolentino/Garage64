@@ -92,6 +92,41 @@ CREATE TABLE IF NOT EXISTS admin_users (
     is_superadmin TINYINT(1) NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+-- Miniature Comments (social module — Phase 1)
+CREATE TABLE IF NOT EXISTS miniature_comments (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    miniature_id INT UNSIGNED NOT NULL,
+    user_id INT UNSIGNED NOT NULL,
+    parent_id INT UNSIGNED NULL DEFAULT NULL,
+    body TEXT NOT NULL,
+    is_pinned TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_comments_mini_created (miniature_id, created_at),
+    KEY idx_comments_user (user_id),
+    KEY idx_comments_parent (parent_id),
+    KEY idx_comments_pinned (miniature_id, is_pinned, created_at),
+    FOREIGN KEY (miniature_id) REFERENCES miniatures(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+-- Notifications (social module — Phase 5)
+CREATE TABLE IF NOT EXISTS notifications (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL,
+    actor_user_id INT UNSIGNED NOT NULL,
+    type ENUM('comment', 'reply', 'mention') NOT NULL,
+    miniature_id INT UNSIGNED NOT NULL,
+    comment_id INT UNSIGNED NULL,
+    target_url VARCHAR(255) NOT NULL,
+    is_read TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_notif_user_unread (user_id, is_read, created_at),
+    KEY idx_notif_miniature (miniature_id),
+    KEY idx_notif_comment (comment_id),
+    FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE,
+    FOREIGN KEY (actor_user_id) REFERENCES admin_users(id) ON DELETE CASCADE,
+    FOREIGN KEY (miniature_id) REFERENCES miniatures(id) ON DELETE CASCADE,
+    FOREIGN KEY (comment_id) REFERENCES miniature_comments(id) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 -- Default data
 INSERT IGNORE INTO categories (name)
 VALUES ('Muscle Cars'),
