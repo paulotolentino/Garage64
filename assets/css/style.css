@@ -4099,3 +4099,375 @@ body.admin-layout {
     flex-basis: 92px;
   }
 }
+
+/* ═══ Form de miniatura — cadastro/edição (admin-miniature-form-*) ══════
+   Reaproveita dash-hero, md-btn, md-pill, lp-eyebrow. Escopo .admin-miniature-form-*.
+═════════════════════════════════════════════════════════════════════ */
+.admin-miniature-form-hero {
+  margin-bottom: 1.25rem;
+}
+.admin-miniature-form-hero-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: var(--amber-core);
+  background: var(--amber-glow);
+  border: 1px solid var(--line-amber);
+}
+
+/* Seção colapsável */
+.admin-miniature-form-section {
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+.admin-miniature-form-head {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 1rem 1.15rem;
+  cursor: pointer;
+  color: inherit;
+}
+.admin-miniature-form-head-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--amber-glow);
+  color: var(--amber-core);
+  font-size: 1rem;
+}
+.admin-miniature-form-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin-right: auto;
+  min-width: 0;
+}
+.admin-miniature-form-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--ink-primary);
+  line-height: 1.2;
+}
+.admin-miniature-form-caret {
+  color: var(--ink-muted);
+  font-size: 0.8rem;
+  transition: transform 0.2s;
+}
+.admin-miniature-form-head[aria-expanded="false"] .admin-miniature-form-caret {
+  transform: rotate(-90deg);
+}
+.admin-miniature-form-body {
+  padding: 0 1.15rem 1.15rem;
+}
+.admin-miniature-form-section.is-collapsed .admin-miniature-form-body {
+  display: none;
+}
+
+/* Campos */
+.admin-miniature-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.85rem;
+}
+.admin-miniature-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.admin-miniature-form-field.amf-col-2 {
+  grid-column: span 2;
+}
+.admin-miniature-form-field label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+.admin-miniature-form-field label i {
+  color: var(--ink-muted);
+  margin-right: 0.2rem;
+}
+.amf-input,
+.amf-textarea {
+  width: 100%;
+  background: var(--surface-base);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  color: var(--ink-primary);
+  padding: 0.6rem 0.8rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.amf-input:focus,
+.amf-textarea:focus {
+  border-color: var(--amber-core);
+}
+.amf-textarea {
+  resize: vertical;
+  min-height: 3rem;
+}
+.admin-miniature-form-help {
+  font-size: 0.74rem;
+  color: var(--ink-muted);
+}
+.admin-miniature-form-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--ink-muted);
+  margin: 0 0 0.75rem;
+}
+
+/* Blocos de seleção (pílulas) */
+.admin-miniature-form-block {
+  margin-bottom: 1rem;
+}
+.admin-miniature-form-block:last-child {
+  margin-bottom: 0;
+}
+.admin-miniature-form-block-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  margin-bottom: 0.5rem;
+}
+.admin-miniature-form-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.amf-pick {
+  position: relative;
+  cursor: pointer;
+}
+.amf-pick input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+.amf-pick-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--surface-base);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  color: var(--ink-secondary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.45rem 0.85rem;
+  transition:
+    border-color 0.15s,
+    color 0.15s,
+    background 0.15s;
+}
+.amf-pick-pill i {
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+  transition: color 0.15s;
+}
+.amf-pick:hover .amf-pick-pill {
+  border-color: var(--line-amber);
+  color: var(--ink-primary);
+}
+.amf-pick input:checked + .amf-pick-pill {
+  background: var(--amber-glow);
+  border-color: var(--amber-core);
+  color: var(--amber-bright);
+}
+.amf-pick input:checked + .amf-pick-pill i {
+  color: var(--amber-core);
+}
+.amf-pick input:focus-visible + .amf-pick-pill {
+  border-color: var(--amber-core);
+  box-shadow: 0 0 0 2px var(--amber-glow);
+}
+
+/* Fotos existentes */
+.admin-miniature-form-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.1rem;
+}
+.admin-miniature-form-photo {
+  width: 140px;
+  cursor: grab;
+}
+.admin-miniature-form-photo-img {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-strong);
+  background: var(--surface-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.admin-miniature-form-photo.is-primary .admin-miniature-form-photo-img {
+  border-color: var(--amber-core);
+}
+.admin-miniature-form-photo-img img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+.admin-miniature-form-photo-cover {
+  position: absolute;
+  top: 0.4rem;
+  left: 0.4rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--surface-base);
+  background: var(--amber-core);
+  border-radius: var(--radius-pill);
+  padding: 0.12rem 0.45rem;
+}
+.admin-miniature-form-photo-acts {
+  display: flex;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+}
+.admin-miniature-form-photo-btn {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-base);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink-secondary);
+  padding: 0.35rem 0;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
+}
+.admin-miniature-form-photo-btn:hover {
+  border-color: var(--line-amber);
+  color: var(--ink-primary);
+}
+.admin-miniature-form-photo-btn.is-active {
+  background: var(--amber-core);
+  border-color: var(--amber-core);
+  color: var(--surface-base);
+  cursor: default;
+}
+.admin-miniature-form-photo-btn.is-danger:hover {
+  border-color: var(--state-want);
+  color: var(--state-want);
+}
+
+/* Dropzone + preview */
+.admin-miniature-form-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  text-align: center;
+  background: var(--surface-base);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-md);
+  padding: 1.5rem 1rem;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.admin-miniature-form-drop:hover {
+  border-color: var(--line-amber);
+}
+.admin-miniature-form-drop i {
+  font-size: 1.6rem;
+  color: var(--amber-core);
+}
+.admin-miniature-form-drop-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+.admin-miniature-form-drop-sub {
+  font-size: 0.76rem;
+  color: var(--ink-muted);
+}
+.admin-miniature-form-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+.admin-miniature-form-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
+}
+.admin-miniature-form-preview:empty {
+  margin-top: 0;
+}
+.admin-miniature-form-preview-item {
+  width: 110px;
+}
+.admin-miniature-form-preview-item img {
+  width: 110px;
+  height: 110px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-strong);
+  background: var(--surface-base);
+}
+.admin-miniature-form-preview-name {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--ink-muted);
+  margin-top: 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Rodapé de ações */
+.admin-miniature-form-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 575.98px) {
+  .admin-miniature-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .admin-miniature-form-field.amf-col-2 {
+    grid-column: span 1;
+  }
+}

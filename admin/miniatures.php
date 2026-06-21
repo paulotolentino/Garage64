@@ -832,311 +832,312 @@ $render_item = function (array $m) use ($admin_page) {
 </div>
 
 <?php elseif ($action === 'add' || $action === 'edit'): ?>
-<!-- ADD / EDIT FORM -->
-<div class="d-flex align-items-center mb-3 gap-2">
-    <a href="/admin/miniatures" class="btn btn-outline-secondary btn-sm"><i class="fa fa-arrow-left"></i></a>
-    <h1 class="h4 mb-0 ms-2">
-        <?= $editing ? '<i class="fa fa-edit me-2 text-warning"></i>Editar: ' . e($editing['name']) : '<i class="fa fa-plus me-2 text-warning"></i>Nova Miniatura' ?>
-    </h1>
-</div>
+<!-- ═══ ADD / EDIT — Nova / Editar miniatura ═══════════════════════════ -->
+<?php
+// Helpers de seção colapsável (estado persistido em localStorage via JS).
+$amf_open = function (string $key, string $eyebrow, string $title, string $icon) { ?>
+    <section class="admin-miniature-form-section" data-amf-section="<?= e($key) ?>">
+        <button type="button" class="admin-miniature-form-head" aria-expanded="true">
+            <span class="admin-miniature-form-head-ico"><i class="fa <?= e($icon) ?>"></i></span>
+            <span class="admin-miniature-form-head-text">
+                <span class="lp-eyebrow"><?= e($eyebrow) ?></span>
+                <span class="admin-miniature-form-title"><?= e($title) ?></span>
+            </span>
+            <i class="fa fa-chevron-down admin-miniature-form-caret"></i>
+        </button>
+        <div class="admin-miniature-form-body">
+<?php };
+$amf_close = function () { ?>
+        </div>
+    </section>
+<?php };
 
-<form method="post" enctype="multipart/form-data">
+$cond_cur = $editing ? ($editing['condition'] ?? 'sealed') : 'sealed';
+$loc_cur  = $editing ? ($editing['location'] ?? 'storage') : 'storage';
+$emo_cur  = $editing ? (int) ($editing['emotional_rating'] ?? 0) : 0;
+?>
+
+<form method="post" enctype="multipart/form-data" id="amfForm">
     <?= csrf_field() ?>
     <input type="hidden" name="id" value="<?= $editing ? $editing['id'] : '' ?>">
     <input type="hidden" name="return_page" value="<?= max(1, (int)($_GET['return_page'] ?? 1)) ?>">
 
-    <div class="row g-4">
-        <!-- Left column -->
-        <div class="col-12 col-lg-8">
+    <!-- Hero -->
+    <section class="dash-hero admin-miniature-form-hero">
+        <div class="dash-hero-id">
+            <div class="dash-hero-avatar admin-miniature-form-hero-icon"><i class="fa fa-<?= $editing ? 'pen' : 'plus' ?>"></i></div>
+            <div class="dash-hero-text">
+                <div class="lp-eyebrow">Coleção</div>
+                <h1 class="dash-hero-name"><?= $editing ? 'Editar miniatura' : 'Nova miniatura' ?></h1>
+                <div class="dash-hero-handle">Adicione informações, fotos e detalhes da sua peça.</div>
+            </div>
+        </div>
+        <div class="dash-hero-actions">
+            <button type="submit" class="md-btn md-btn-primary"><i class="fa fa-floppy-disk"></i><?= $editing ? 'Salvar alterações' : 'Salvar miniatura' ?></button>
+            <?php if ($editing && $editing['is_public']): ?>
+                <a href="<?= e(mini_url($editing)) ?>" target="_blank" class="md-btn"><i class="fa fa-up-right-from-square"></i>Ver página pública</a>
+            <?php endif; ?>
+            <a href="/admin/miniatures" class="md-btn"><i class="fa fa-arrow-left"></i>Voltar</a>
+        </div>
+    </section>
 
-            <!-- Basic Info -->
-            <div class="card bg-dark border-secondary mb-4">
-                <div class="card-header border-secondary">Informações Básicas</div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-12">
-                            <label class="form-label text-secondary">Nome *</label>
-                            <input type="text" name="name" class="form-control bg-dark text-light border-secondary"
-                                   required value="<?= $editing ? e($editing['name']) : '' ?>">
+    <!-- Seção: Fotos -->
+    <?php $amf_open('fotos', 'Vitrine', 'Fotos', 'fa-images'); ?>
+        <?php if (!empty($edit_photos)): ?>
+            <p class="admin-miniature-form-hint"><i class="fa fa-grip-vertical"></i>Arraste para reordenar. A capa é a primeira/estrela.</p>
+            <div class="admin-miniature-form-photos" id="sortable-photos" data-miniature-id="<?= $editing['id'] ?>">
+                <?php foreach ($edit_photos as $ph): ?>
+                    <div class="admin-miniature-form-photo photo-thumb-admin<?= $ph['is_primary'] ? ' is-primary' : '' ?>" data-photo-id="<?= $ph['id'] ?>">
+                        <div class="admin-miniature-form-photo-img">
+                            <img src="<?= e(photo_url($ph['file_path'])) ?>" alt="" class="photo-admin-img">
+                            <?php if ($ph['is_primary']): ?><span class="admin-miniature-form-photo-cover"><i class="fa fa-star"></i>Capa</span><?php endif; ?>
                         </div>
-                        <div class="col-12 col-md-6">
-                            <label class="form-label text-secondary">Fabricante *</label>
-                            <input type="text" name="manufacturer" list="manufacturers-list"
-                                   class="form-control bg-dark text-light border-secondary"
-                                   required value="<?= $editing ? e($editing['manufacturer']) : '' ?>">
-                            <datalist id="manufacturers-list">
-                                <?php foreach ($manufacturers as $mfr): ?>
-                                    <option value="<?= e($mfr) ?>">
-                                <?php endforeach; ?>
-                                <option value="Hot Wheels">
-                                <option value="Mini GT">
-                                <option value="Kaido House">
-                                <option value="Pop Race">
-                                <option value="M2 Machines">
-                                <option value="Johnny Lightning">
-                                <option value="Majorette">
-                                <option value="Greenlight">
-                                <option value="Auto World">
-                                <option value="Bburago">
-                            </datalist>
-                        </div>
-                        <div class="col-12 col-md-6">
-                            <label class="form-label text-secondary">Modelo</label>
-                            <input type="text" name="model" class="form-control bg-dark text-light border-secondary"
-                                   value="<?= $editing ? e($editing['model'] ?? '') : '' ?>">
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <label class="form-label text-secondary">Escala</label>
-                            <input type="text" name="scale" list="scales-list"
-                                   class="form-control bg-dark text-light border-secondary"
-                                   placeholder="1:64"
-                                   value="<?= $editing ? e($editing['scale'] ?? '') : '' ?>">
-                            <datalist id="scales-list">
-                                <option value="1:64">
-                                <option value="1:43">
-                                <option value="1:18">
-                                <option value="1:24">
-                                <option value="1:32">
-                                <?php foreach ($scales as $sc): ?>
-                                    <option value="<?= e($sc) ?>">
-                                <?php endforeach; ?>
-                            </datalist>
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <label class="form-label text-secondary">Ano</label>
-                            <input type="number" name="year" class="form-control bg-dark text-light border-secondary"
-                                   min="1950" max="<?= date('Y') + 1 ?>"
-                                   value="<?= $editing ? e((string)($editing['year'] ?? '')) : '' ?>">
-                        </div>
-                        <div class="col-12 col-md-6">
-                            <label class="form-label text-secondary">Categoria</label>
-                            <select name="category_id" class="form-select bg-dark text-light border-secondary">
-                                <option value="">Sem categoria</option>
-                                <?php foreach ($categories as $cat): ?>
-                                    <option value="<?= $cat['id'] ?>"
-                                        <?= $editing && (int)$editing['category_id'] === (int)$cat['id'] ? 'selected' : '' ?>>
-                                        <?= e($cat['name']) ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="col-12 col-md-6">
-                            <label class="form-label text-secondary">Embalagem</label>
-                            <select name="condition" class="form-select bg-dark text-light border-secondary">
-                                <option value="sealed" <?= ($editing ? $editing['condition'] : 'sealed') === 'sealed' ? 'selected' : '' ?>>Lacrada</option>
-                                <option value="open"   <?= ($editing ? $editing['condition'] : 'sealed') === 'open'   ? 'selected' : '' ?>>Aberta</option>
-                                <option value="no_box" <?= ($editing ? $editing['condition'] : 'sealed') === 'no_box' ? 'selected' : '' ?>>Sem caixa</option>
-                            </select>
-                        </div>
-                        <div class="col-12 col-md-6">
-                            <label class="form-label text-secondary">Localização</label>
-                            <select name="location" class="form-select bg-dark text-light border-secondary">
-                                <option value="storage" <?= ($editing ? $editing['location'] : 'storage') === 'storage' ? 'selected' : '' ?>>Em armazenamento</option>
-                                <option value="display" <?= ($editing ? $editing['location'] : 'storage') === 'display' ? 'selected' : '' ?>>Em exposição</option>
-                            </select>
-                        </div>
-                        <div class="col-12">
-                            <div class="form-check form-switch mt-1">
-                                <input class="form-check-input" type="checkbox" name="is_public" id="is_public" value="1"
-                                       <?= (!$editing || $editing['is_public']) ? 'checked' : '' ?>>
-                                <label class="form-check-label text-secondary" for="is_public">
-                                    Visível no site público
-                                </label>
-                            </div>
-                        </div>
-                        <div class="col-12">
-                            <div class="form-check form-switch mt-1">
-                                <input class="form-check-input" type="checkbox" name="is_featured" id="is_featured" value="1"
-                                       <?= ($editing && $editing['is_featured']) ? 'checked' : '' ?>>
-                                <label class="form-check-label text-secondary" for="is_featured">
-                                    <i class="fa fa-star text-warning me-1"></i>Destacar (aparece primeiro)
-                                </label>
-                            </div>
-                        </div>
-                        <div class="col-12 col-md-4">
-                            <label class="form-label text-secondary">Ordem de exibição</label>
-                            <input type="number" name="sort_order" min="0"
-                                   class="form-control bg-dark text-light border-secondary"
-                                   value="<?= $editing ? (int)($editing['sort_order'] ?? 9999) : 9999 ?>"
-                                   title="Número menor aparece antes (0 = padrão)">
-                            <small class="text-secondary">Menor número = aparece antes</small>
+                        <div class="admin-miniature-form-photo-acts">
+                            <button type="button" class="admin-miniature-form-photo-btn rotate-btn"
+                                    data-photo-id="<?= $ph['id'] ?>" data-miniature-id="<?= $editing['id'] ?>" title="Girar 90°">
+                                <i class="fa fa-rotate-right"></i>
+                            </button>
+                            <?php if ($ph['is_primary']): ?>
+                                <span class="admin-miniature-form-photo-btn is-active" title="Capa atual"><i class="fa fa-star"></i></span>
+                            <?php else: ?>
+                                <button type="submit" name="primary_photo_id" value="<?= $ph['id'] ?>"
+                                        class="admin-miniature-form-photo-btn" title="Definir como capa"><i class="fa fa-star"></i></button>
+                            <?php endif; ?>
+                            <button type="submit" name="delete_photo_id" value="<?= $ph['id'] ?>"
+                                    class="admin-miniature-form-photo-btn is-danger"
+                                    onclick="return confirm('Remover esta foto?')" title="Remover foto"><i class="fa fa-trash"></i></button>
                         </div>
                     </div>
-                </div>
+                <?php endforeach; ?>
             </div>
+        <?php endif; ?>
 
-            <!-- Public info -->
-            <div class="card bg-dark border-secondary mb-4">
-                <div class="card-header border-secondary">Informações Públicas</div>
-                <div class="card-body">
-                    <label class="form-label text-secondary">Descrição pública</label>
-                    <textarea name="public_description" rows="3"
-                              class="form-control bg-dark text-light border-secondary"><?= $editing ? e($editing['public_description'] ?? '') : '' ?></textarea>
-                </div>
+        <label class="admin-miniature-form-drop" for="amfPhotos">
+            <i class="fa fa-cloud-arrow-up"></i>
+            <span class="admin-miniature-form-drop-title"><?= !empty($edit_photos) ? 'Adicionar mais fotos' : 'Adicionar fotos' ?></span>
+            <span class="admin-miniature-form-drop-sub">Múltiplos arquivos · até 10 MB cada · JPEG, PNG, WebP ou GIF</span>
+        </label>
+        <input type="file" id="amfPhotos" name="photos[]" multiple accept="image/*" class="admin-miniature-form-file">
+        <div class="admin-miniature-form-preview" id="amfPreview"></div>
+    <?php $amf_close(); ?>
+
+    <!-- Seção: Informações principais -->
+    <?php $amf_open('principais', 'Identidade', 'Informações principais', 'fa-car-side'); ?>
+        <div class="admin-miniature-form-grid">
+            <div class="admin-miniature-form-field amf-col-2">
+                <label for="amfManufacturer">Fabricante *</label>
+                <input type="text" id="amfManufacturer" name="manufacturer" list="manufacturers-list" class="amf-input"
+                       required value="<?= $editing ? e($editing['manufacturer']) : '' ?>" placeholder="Hot Wheels, Mini GT...">
+                <datalist id="manufacturers-list">
+                    <?php foreach ($manufacturers as $mfr): ?><option value="<?= e($mfr) ?>"><?php endforeach; ?>
+                    <option value="Hot Wheels"><option value="Mini GT"><option value="Kaido House">
+                    <option value="Pop Race"><option value="M2 Machines"><option value="Johnny Lightning">
+                    <option value="Majorette"><option value="Greenlight"><option value="Auto World"><option value="Bburago">
+                </datalist>
             </div>
-
-            <!-- Private info -->
-            <div class="card bg-dark border-secondary mb-4">
-                <div class="card-header border-secondary"><i class="fa fa-lock me-1 text-warning"></i>Informações Privadas</div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label text-secondary">História da peça</label>
-                        <textarea name="private_story" rows="3"
-                                  class="form-control bg-dark text-light border-secondary"><?= $editing ? e($editing['private_story'] ?? '') : '' ?></textarea>
-                    </div>
-                    <div>
-                        <label class="form-label text-secondary">Observações pessoais</label>
-                        <textarea name="private_notes" rows="2"
-                                  class="form-control bg-dark text-light border-secondary"><?= $editing ? e($editing['private_notes'] ?? '') : '' ?></textarea>
-                    </div>
-                </div>
+            <div class="admin-miniature-form-field amf-col-2">
+                <label for="amfName">Nome *</label>
+                <input type="text" id="amfName" name="name" class="amf-input" required
+                       value="<?= $editing ? e($editing['name']) : '' ?>" placeholder="Ex.: Nissan Skyline GT-R R34">
             </div>
+            <div class="admin-miniature-form-field amf-col-2">
+                <label for="amfModel">Modelo</label>
+                <input type="text" id="amfModel" name="model" class="amf-input"
+                       value="<?= $editing ? e($editing['model'] ?? '') : '' ?>">
+            </div>
+            <div class="admin-miniature-form-field">
+                <label for="amfScale">Escala</label>
+                <input type="text" id="amfScale" name="scale" list="scales-list" class="amf-input" placeholder="1:64"
+                       value="<?= $editing ? e($editing['scale'] ?? '') : '' ?>">
+                <datalist id="scales-list">
+                    <option value="1:64"><option value="1:43"><option value="1:18"><option value="1:24"><option value="1:32">
+                    <?php foreach ($scales as $sc): ?><option value="<?= e($sc) ?>"><?php endforeach; ?>
+                </datalist>
+            </div>
+            <div class="admin-miniature-form-field">
+                <label for="amfYear">Ano</label>
+                <input type="number" id="amfYear" name="year" class="amf-input" min="1950" max="<?= date('Y') + 1 ?>"
+                       value="<?= $editing ? e((string)($editing['year'] ?? '')) : '' ?>">
+            </div>
+            <div class="admin-miniature-form-field amf-col-2">
+                <label for="amfCategory">Categoria</label>
+                <select id="amfCategory" name="category_id" class="amf-input">
+                    <option value="">Sem categoria</option>
+                    <?php foreach ($categories as $cat): ?>
+                        <option value="<?= $cat['id'] ?>" <?= $editing && (int)$editing['category_id'] === (int)$cat['id'] ? 'selected' : '' ?>><?= e($cat['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
+    <?php $amf_close(); ?>
 
-            <!-- Photos -->
-            <div class="card bg-dark border-secondary mb-4">
-                <div class="card-header border-secondary">Fotos</div>
-                <div class="card-body">
-                    <?php if (!empty($edit_photos)): ?>
-                        <p class="text-secondary small mb-2"><i class="fa fa-grip-vertical me-1"></i>Arraste para reordenar.</p>
-                        <div class="d-flex flex-wrap gap-3 mb-3" id="sortable-photos" data-miniature-id="<?= $editing['id'] ?>">
-                            <?php foreach ($edit_photos as $ph): ?>
-                                <div class="position-relative photo-thumb-admin" data-photo-id="<?= $ph['id'] ?>" style="cursor:grab;width:150px;">
-                                    <div class="rounded overflow-hidden <?= $ph['is_primary'] ? 'border border-warning border-2' : 'border border-secondary' ?>"
-                                         style="width:150px;height:150px;background:#000;display:flex;align-items:center;justify-content:center;">
-                                        <img src="<?= e(photo_url($ph['file_path'])) ?>"
-                                             alt=""
-                                             class="photo-admin-img"
-                                             style="max-width:150px;max-height:150px;object-fit:contain;pointer-events:none;display:block;">
-                                    </div>
-                                    <div class="d-flex gap-1 mt-1">
-                                        <button type="button"
-                                                class="btn btn-sm btn-outline-info flex-grow-1 rotate-btn"
-                                                data-photo-id="<?= $ph['id'] ?>"
-                                                data-miniature-id="<?= $editing['id'] ?>"
-                                                title="Girar 90°">
-                                            <i class="fa fa-rotate-right"></i>
-                                        </button>
-                                        <?php if ($ph['is_primary']): ?>
-                                            <span class="btn btn-sm btn-warning flex-grow-1 disabled pe-none">
-                                                <i class="fa fa-star"></i>
-                                            </span>
-                                        <?php else: ?>
-                                            <button type="submit" name="primary_photo_id" value="<?= $ph['id'] ?>"
-                                                    class="btn btn-sm btn-outline-warning flex-grow-1" title="Definir como principal">
-                                                <i class="fa fa-star"></i>
-                                            </button>
-                                        <?php endif; ?>
-                                        <button type="submit" name="delete_photo_id" value="<?= $ph['id'] ?>"
-                                                class="btn btn-sm btn-outline-danger"
-                                                onclick="return confirm('Remover esta foto?')" title="Remover foto">
-                                            <i class="fa fa-trash"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
-                    <label class="form-label text-secondary">Adicionar fotos</label>
-                    <input type="file" name="photos[]" multiple accept="image/*"
-                           class="form-control bg-dark text-light border-secondary">
-                    <small class="text-secondary">Múltiplos arquivos. Máximo 10 MB por foto. JPEG, PNG, WebP ou GIF.</small>
+    <!-- Seção: Coleção -->
+    <?php $amf_open('colecao', 'Organização', 'Coleção', 'fa-warehouse'); ?>
+        <div class="admin-miniature-form-block">
+            <span class="admin-miniature-form-block-label">Embalagem</span>
+            <div class="admin-miniature-form-picks">
+                <label class="amf-pick"><input type="radio" name="condition" value="sealed" <?= $cond_cur === 'sealed' ? 'checked' : '' ?>><span class="amf-pick-pill"><i class="fa fa-box"></i>Lacrada</span></label>
+                <label class="amf-pick"><input type="radio" name="condition" value="open" <?= $cond_cur === 'open' ? 'checked' : '' ?>><span class="amf-pick-pill"><i class="fa fa-box-open"></i>Aberta</span></label>
+                <label class="amf-pick"><input type="radio" name="condition" value="no_box" <?= $cond_cur === 'no_box' ? 'checked' : '' ?>><span class="amf-pick-pill"><i class="fa fa-cube"></i>Sem caixa</span></label>
+            </div>
+        </div>
+        <div class="admin-miniature-form-block">
+            <span class="admin-miniature-form-block-label">Localização</span>
+            <div class="admin-miniature-form-picks">
+                <label class="amf-pick"><input type="radio" name="location" value="storage" <?= $loc_cur === 'storage' ? 'checked' : '' ?>><span class="amf-pick-pill"><i class="fa fa-box-archive"></i>Armazenada</span></label>
+                <label class="amf-pick"><input type="radio" name="location" value="display" <?= $loc_cur === 'display' ? 'checked' : '' ?>><span class="amf-pick-pill"><i class="fa fa-lightbulb"></i>Em exposição</span></label>
+            </div>
+        </div>
+        <div class="admin-miniature-form-block">
+            <span class="admin-miniature-form-block-label">Visibilidade e destaque</span>
+            <div class="admin-miniature-form-picks">
+                <label class="amf-pick amf-pick-toggle"><input type="checkbox" name="is_public" value="1" <?= (!$editing || $editing['is_public']) ? 'checked' : '' ?>><span class="amf-pick-pill"><i class="fa fa-eye"></i>Pública no site</span></label>
+                <label class="amf-pick amf-pick-toggle"><input type="checkbox" name="is_featured" value="1" <?= ($editing && $editing['is_featured']) ? 'checked' : '' ?>><span class="amf-pick-pill"><i class="fa fa-star"></i>Destacar</span></label>
+            </div>
+        </div>
+        <div class="admin-miniature-form-block">
+            <span class="admin-miniature-form-block-label">Avaliação emocional</span>
+            <div class="admin-miniature-form-picks">
+                <?php
+                $emo_opts = [
+                    1 => ['fa-circle', 'Pouco importante'],
+                    2 => ['fa-heart', 'Gosto da peça'],
+                    3 => ['fa-heart', 'Muito importante'],
+                    4 => ['fa-gem', 'Especial'],
+                    5 => ['fa-lock', 'Nunca vender'],
+                ];
+                foreach ($emo_opts as $r => [$ic, $lbl]): ?>
+                    <label class="amf-pick"><input type="radio" name="emotional_rating" value="<?= $r ?>" <?= $emo_cur === $r ? 'checked' : '' ?>><span class="amf-pick-pill"><i class="fa <?= $ic ?>"></i><?= $lbl ?></span></label>
+                <?php endforeach; ?>
+                <label class="amf-pick"><input type="radio" name="emotional_rating" value="" <?= $emo_cur === 0 ? 'checked' : '' ?>><span class="amf-pick-pill"><i class="fa fa-minus"></i>Não avaliada</span></label>
+            </div>
+        </div>
+        <?php if (!empty($tags)): ?>
+        <div class="admin-miniature-form-block">
+            <span class="admin-miniature-form-block-label">Tags</span>
+            <div class="admin-miniature-form-picks">
+                <?php foreach ($tags as $tag): ?>
+                    <label class="amf-pick"><input type="checkbox" name="tags[]" value="<?= $tag['id'] ?>" <?= in_array($tag['id'], $edit_tags) ? 'checked' : '' ?>><span class="amf-pick-pill"><i class="fa fa-tag"></i><?= e($tag['name']) ?></span></label>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+        <div class="admin-miniature-form-block">
+            <span class="admin-miniature-form-block-label">Ordem de exibição</span>
+            <div class="admin-miniature-form-grid">
+                <div class="admin-miniature-form-field">
+                    <input type="number" name="sort_order" min="0" class="amf-input"
+                           value="<?= $editing ? (int)($editing['sort_order'] ?? 9999) : 9999 ?>" title="Número menor aparece antes">
+                    <span class="admin-miniature-form-help">Menor número aparece antes (0 = topo).</span>
                 </div>
             </div>
         </div>
+    <?php $amf_close(); ?>
 
-        <!-- Right column -->
-        <div class="col-12 col-lg-4">
-            <!-- Financial -->
-            <div class="card bg-dark border-secondary mb-4">
-                <div class="card-header border-secondary"><i class="fa fa-lock me-1 text-warning"></i>Financeiro</div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label text-secondary">Valor pago (R$)</label>
-                        <input type="number" step="0.01" min="0" name="purchase_price"
-                               class="form-control bg-dark text-light border-secondary"
-                               value="<?= $editing && $editing['purchase_price'] !== null ? e(number_format((float)$editing['purchase_price'], 2, '.', '')) : '' ?>">
-                    </div>
-                    <div>
-                        <label class="form-label text-secondary">Valor estimado (R$)</label>
-                        <input type="number" step="0.01" min="0" name="estimated_price"
-                               class="form-control bg-dark text-light border-secondary"
-                               value="<?= $editing && $editing['estimated_price'] !== null ? e(number_format((float)$editing['estimated_price'], 2, '.', '')) : '' ?>">
-                    </div>
-                </div>
-            </div>
-
-            <!-- Purchase info -->
-            <div class="card bg-dark border-secondary mb-4">
-                <div class="card-header border-secondary">Compra</div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label text-secondary">Data de compra</label>
-                        <input type="date" name="purchase_date"
-                               class="form-control bg-dark text-light border-secondary"
-                               value="<?= $editing ? e($editing['purchase_date'] ?? '') : '' ?>">
-                    </div>
-                    <div>
-                        <label class="form-label text-secondary">Local de compra</label>
-                        <input type="text" name="purchase_location"
-                               class="form-control bg-dark text-light border-secondary"
-                               value="<?= $editing ? e($editing['purchase_location'] ?? '') : '' ?>">
-                    </div>
-                </div>
-            </div>
-
-            <!-- Emotional rating -->
-            <div class="card bg-dark border-secondary mb-4">
-                <div class="card-header border-secondary"><i class="fa fa-heart me-1 text-warning"></i>Avaliação Emocional</div>
-                <div class="card-body">
-                    <?php
-                    $rating_opts = [
-                        1 => ['fa-circle',  'secondary', 'Pouco importante'],
-                        2 => ['fa-heart',   'info',      'Gosto da peça'],
-                        3 => ['fa-heart',   'success',   'Muito importante'],
-                        4 => ['fa-gem',     'warning',   'Especial'],
-                        5 => ['fa-lock',    'danger',    'Nunca vender'],
-                    ];
-                    foreach ($rating_opts as $r => [$icon, $color, $rlabel]):
-                        $checked = $editing && (int)$editing['emotional_rating'] === $r ? 'checked' : '';
-                    ?>
-                        <div class="form-check mb-1">
-                            <input class="form-check-input" type="radio" name="emotional_rating"
-                                   id="rating<?= $r ?>" value="<?= $r ?>" <?= $checked ?>>
-                            <label class="form-check-label" for="rating<?= $r ?>">
-                                <span class="badge bg-<?= $color ?>"><i class="fa <?= $icon ?> me-1"></i><?= $rlabel ?></span>
-                            </label>
-                        </div>
-                    <?php endforeach; ?>
-                    <div class="form-check mt-2">
-                        <input class="form-check-input" type="radio" name="emotional_rating" id="ratingNone" value=""
-                               <?= !$editing || !$editing['emotional_rating'] ? 'checked' : '' ?>>
-                        <label class="form-check-label text-secondary" for="ratingNone"><i class="fa fa-minus me-1"></i>Não avaliada</label>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Tags -->
-            <div class="card bg-dark border-secondary mb-4">
-                <div class="card-header border-secondary">Tags</div>
-                <div class="card-body" style="max-height:200px;overflow-y:auto">
-                    <?php foreach ($tags as $tag): ?>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox"
-                                   name="tags[]" id="tag<?= $tag['id'] ?>" value="<?= $tag['id'] ?>"
-                                   <?= in_array($tag['id'], $edit_tags) ? 'checked' : '' ?>>
-                            <label class="form-check-label text-secondary" for="tag<?= $tag['id'] ?>"><?= e($tag['name']) ?></label>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-
-            <button type="submit" class="btn btn-warning w-100">
-                <i class="fa fa-save me-1"></i><?= $editing ? 'Salvar alterações' : 'Adicionar miniatura' ?>
-            </button>
-            <a href="/admin/miniatures" class="btn btn-outline-secondary w-100 mt-2">Cancelar</a>
+    <!-- Seção: História -->
+    <?php $amf_open('historia', 'Memória', 'História da miniatura', 'fa-book-open'); ?>
+        <div class="admin-miniature-form-field">
+            <label for="amfPublicDesc"><i class="fa fa-eye"></i> Descrição pública</label>
+            <textarea id="amfPublicDesc" name="public_description" rows="3" class="amf-textarea"
+                      placeholder="O que aparece na página pública da peça."><?= $editing ? e($editing['public_description'] ?? '') : '' ?></textarea>
         </div>
+        <div class="admin-miniature-form-field">
+            <label for="amfStory"><i class="fa fa-lock"></i> História pessoal (privada)</label>
+            <textarea id="amfStory" name="private_story" rows="3" class="amf-textarea"
+                      placeholder="Como você conseguiu, por que é especial..."><?= $editing ? e($editing['private_story'] ?? '') : '' ?></textarea>
+        </div>
+        <div class="admin-miniature-form-field">
+            <label for="amfNotes"><i class="fa fa-lock"></i> Notas privadas</label>
+            <textarea id="amfNotes" name="private_notes" rows="2" class="amf-textarea"
+                      placeholder="Anotações pessoais."><?= $editing ? e($editing['private_notes'] ?? '') : '' ?></textarea>
+        </div>
+    <?php $amf_close(); ?>
+
+    <!-- Seção: Financeiro -->
+    <?php $amf_open('financeiro', 'Privado', 'Informações financeiras', 'fa-coins'); ?>
+        <div class="admin-miniature-form-grid">
+            <div class="admin-miniature-form-field">
+                <label for="amfPaid">Valor pago (R$)</label>
+                <input type="number" id="amfPaid" step="0.01" min="0" name="purchase_price" class="amf-input"
+                       value="<?= $editing && $editing['purchase_price'] !== null ? e(number_format((float)$editing['purchase_price'], 2, '.', '')) : '' ?>">
+            </div>
+            <div class="admin-miniature-form-field">
+                <label for="amfEst">Valor estimado (R$)</label>
+                <input type="number" id="amfEst" step="0.01" min="0" name="estimated_price" class="amf-input"
+                       value="<?= $editing && $editing['estimated_price'] !== null ? e(number_format((float)$editing['estimated_price'], 2, '.', '')) : '' ?>">
+            </div>
+            <div class="admin-miniature-form-field">
+                <label for="amfDate">Data da compra</label>
+                <input type="date" id="amfDate" name="purchase_date" class="amf-input"
+                       value="<?= $editing ? e($editing['purchase_date'] ?? '') : '' ?>">
+            </div>
+            <div class="admin-miniature-form-field">
+                <label for="amfWhere">Local da compra</label>
+                <input type="text" id="amfWhere" name="purchase_location" class="amf-input"
+                       value="<?= $editing ? e($editing['purchase_location'] ?? '') : '' ?>">
+            </div>
+        </div>
+    <?php $amf_close(); ?>
+
+    <div class="admin-miniature-form-foot">
+        <button type="submit" class="md-btn md-btn-primary"><i class="fa fa-floppy-disk"></i><?= $editing ? 'Salvar alterações' : 'Adicionar miniatura' ?></button>
+        <a href="/admin/miniatures" class="md-btn">Cancelar</a>
     </div>
 </form>
+
+<script>
+(function () {
+    // ── Seções colapsáveis (persistência via localStorage) ───────────────────
+    document.querySelectorAll('[data-amf-section]').forEach(function (sec) {
+        var key   = 'amf-sec-' + sec.dataset.amfSection;
+        var head  = sec.querySelector('.admin-miniature-form-head');
+        var stored = localStorage.getItem(key);
+        if (stored === '0') {
+            sec.classList.add('is-collapsed');
+            head.setAttribute('aria-expanded', 'false');
+        }
+        head.addEventListener('click', function () {
+            var collapsed = sec.classList.toggle('is-collapsed');
+            head.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            localStorage.setItem(key, collapsed ? '0' : '1');
+        });
+    });
+
+    // Antes de enviar, expande tudo para que campos obrigatórios sejam validáveis.
+    var form = document.getElementById('amfForm');
+    if (form) {
+        form.addEventListener('submit', function () {
+            document.querySelectorAll('[data-amf-section].is-collapsed').forEach(function (sec) {
+                sec.classList.remove('is-collapsed');
+            });
+        });
+    }
+
+    // ── Preview client-side das fotos novas ──────────────────────────────────
+    var input   = document.getElementById('amfPhotos');
+    var preview = document.getElementById('amfPreview');
+    if (input && preview) {
+        input.addEventListener('change', function () {
+            preview.innerHTML = '';
+            Array.from(input.files).forEach(function (file) {
+                if (!file.type.startsWith('image/')) return;
+                var url = URL.createObjectURL(file);
+                var item = document.createElement('div');
+                item.className = 'admin-miniature-form-preview-item';
+                var img = document.createElement('img');
+                img.src = url;
+                img.onload = function () { URL.revokeObjectURL(url); };
+                var cap = document.createElement('span');
+                cap.className = 'admin-miniature-form-preview-name';
+                cap.textContent = file.name;
+                item.appendChild(img);
+                item.appendChild(cap);
+                preview.appendChild(item);
+            });
+        });
+    }
+})();
+</script>
 <?php endif; ?>
 
 <?php require_once __DIR__ . '/../includes/footer_admin.php'; ?>
