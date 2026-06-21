@@ -236,9 +236,11 @@ if ($action === 'list') {
     $filters = [
         'search'       => trim($_GET['search'] ?? ''),
         'manufacturer' => trim($_GET['manufacturer'] ?? ''),
+        'scale'        => trim($_GET['scale'] ?? ''),
         'category_id'  => (int) ($_GET['category_id'] ?? 0) ?: null,
         'condition'    => trim($_GET['condition'] ?? ''),
         'location'     => trim($_GET['location'] ?? ''),
+        'sort'         => trim($_GET['sort'] ?? ''),
         'is_public'    => null, // admin sees all
         'user_id'      => current_user_id(),
     ];
@@ -250,17 +252,49 @@ if ($action === 'list') {
     $admin_page       = min($admin_page, max(1, $admin_total_pages));
 
     $miniatures = get_miniatures($filters + ['page' => $admin_page, 'per_page' => $admin_per_page]);
+
+    // Modo de visualização (grade padrão) e estado do painel de filtros.
+    $admin_view = ($_GET['view'] ?? 'grid') === 'list' ? 'list' : 'grid';
+    $admin_active_filters = (bool) array_filter(array_intersect_key(
+        $filters, array_flip(['search','manufacturer','scale','category_id','condition','location','sort'])
+    ));
+    $admin_open_filters = $admin_active_filters || !empty($_GET['filters']);
+
+    // Resumo do hero (escopado no usuário, sem alterar functions.php).
+    $admin_uid     = current_user_id();
+    $admin_slug    = current_user_slug();
+    $admin_pub     = 0;
+    try {
+        $st = db()->prepare('SELECT COUNT(*) FROM miniatures WHERE user_id = ? AND is_public = 1');
+        $st->execute([$admin_uid]);
+        $admin_pub = (int) $st->fetchColumn();
+    } catch (\Throwable $e) { $admin_pub = 0; }
+    $admin_all   = count_miniatures(['user_id' => $admin_uid, 'is_public' => null]);
+    $admin_prv   = max(0, $admin_all - $admin_pub);
+    $admin_wish  = count(get_wishlist('', $admin_uid));
+
+    // Base de querystring para paginação/links — preserva filtros + estado de UI.
+    $admin_qs = [];
+    foreach (['search','manufacturer','scale','category_id','condition','location','sort'] as $k) {
+        if (!empty($filters[$k])) $admin_qs[$k] = $filters[$k];
+    }
+    if ($admin_view === 'list')   $admin_qs['view']    = 'list';
+    if ($admin_open_filters)      $admin_qs['filters'] = 1;
 } else {
     $filters    = [];
     $miniatures = [];
     $admin_page = 1;
     $admin_total = 0;
     $admin_total_pages = 1;
+    $admin_view = 'grid';
+    $admin_open_filters = false;
+    $admin_qs = [];
 }
 
 $categories    = get_categories(current_user_id());
 $tags          = get_tags(current_user_id());
 $manufacturers = get_distinct_manufacturers(current_user_id());
+$scales        = get_distinct_scales(current_user_id());
 
 // ─── FORM: Add / Edit ────────────────────────────────────────────────────────
 $editing   = null;
@@ -279,69 +313,198 @@ require_once __DIR__ . '/../includes/header_admin.php';
 ?>
 
 <?php if ($action === 'list'): ?>
-<!-- LIST VIEW -->
-<div class="d-flex align-items-center mb-3 gap-2 flex-wrap">
-    <h1 class="h4 mb-0 me-auto"><i class="fa fa-car me-2 text-warning"></i>Miniaturas</h1>
-    <span class="text-secondary small"><?= $admin_total ?> peça<?= $admin_total !== 1 ? 's' : '' ?></span>
-    <a href="/admin/miniatures?action=add" class="btn btn-warning btn-sm">
-        <i class="fa fa-plus me-1"></i>Adicionar
-    </a>
+<!-- ═══ LIST VIEW — Minha garagem ══════════════════════════════════════ -->
+<?php
+// Base de querystring para links de paginação (preserva filtros + estado de UI).
+$pg_base = '/admin/miniatures?' . http_build_query(['action' => 'list'] + $admin_qs);
+
+// Renderiza um card de miniatura (mesmo markup para grade e lista).
+$render_item = function (array $m) use ($admin_page) {
+    $is_featured = (int) ($m['is_featured'] ?? 0);
+    $is_public   = (int) ($m['is_public'] ?? 0);
+    $cond        = $m['condition'] ?? 'sealed';
+    $loc         = $m['location'] ?? 'storage';
+    $views       = (int) ($m['views'] ?? 0);
+    $photos      = (int) ($m['photo_count'] ?? 0);
+    $edit_url    = '/admin/miniatures?action=edit&id=' . $m['id'] . '&return_page=' . $admin_page;
+    ?>
+    <article class="admin-miniatures-card<?= $is_featured ? ' is-featured' : '' ?>">
+        <label class="admin-miniatures-check" title="Selecionar">
+            <input type="checkbox" class="form-check-input row-check" name="ids[]" value="<?= $m['id'] ?>">
+        </label>
+        <button type="button" class="admin-miniatures-fav toggle-featured-btn"
+                data-id="<?= $m['id'] ?>" data-featured="<?= $is_featured ?>"
+                title="<?= $is_featured ? 'Remover destaque' : 'Destacar' ?>">
+            <i class="fa fa-star <?= $is_featured ? 'text-warning' : '' ?>"></i>
+        </button>
+
+        <a href="<?= $edit_url ?>" class="admin-miniatures-thumb">
+            <img src="<?= e(thumb_url($m['primary_photo'])) ?>"
+                 data-fallback="<?= e(photo_url($m['primary_photo'])) ?>"
+                 alt="<?= e($m['name']) ?>" loading="lazy">
+            <span class="admin-miniatures-vis admin-miniatures-vis-<?= $is_public ? 'on' : 'off' ?>">
+                <i class="fa fa-<?= $is_public ? 'eye' : 'eye-slash' ?>"></i>
+                <span class="admin-miniatures-vis-text"><?= $is_public ? 'Pública' : 'Privada' ?></span>
+            </span>
+        </a>
+
+        <div class="admin-miniatures-body">
+            <?php if (!empty($m['manufacturer'])): ?>
+                <div class="admin-miniatures-maker"><?= e($m['manufacturer']) ?></div>
+            <?php endif; ?>
+            <h3 class="admin-miniatures-name"><?= e($m['name']) ?></h3>
+            <div class="admin-miniatures-pills">
+                <?php if (!empty($m['scale'])): ?>
+                    <span class="md-pill"><i class="fa fa-ruler"></i><?= e($m['scale']) ?></span>
+                <?php endif; ?>
+                <span class="md-pill md-cond-<?= e($cond) ?>"><?= e(condition_label($cond)) ?></span>
+                <span class="md-pill"><i class="fa fa-<?= $loc === 'display' ? 'lightbulb' : 'box-archive' ?>"></i><?= e(location_label_short($loc)) ?></span>
+            </div>
+            <div class="admin-miniatures-meta">
+                <span title="Visualizações"><i class="fa fa-eye"></i><?= number_format($views) ?></span>
+                <span title="Fotos"><i class="fa fa-image"></i><?= number_format($photos) ?></span>
+                <?php if (!empty($m['category_name'])): ?>
+                    <span title="Categoria"><i class="fa fa-tag"></i><?= e($m['category_name']) ?></span>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <div class="admin-miniatures-acts">
+            <a href="<?= $edit_url ?>" class="admin-miniatures-act" title="Editar"><i class="fa fa-pen"></i></a>
+            <a href="<?= $edit_url ?>#fotos" class="admin-miniatures-act" title="Gerenciar fotos"><i class="fa fa-images"></i></a>
+            <a href="<?= e(mini_url($m)) ?>" target="_blank" class="admin-miniatures-act" title="Ver página pública"><i class="fa fa-up-right-from-square"></i></a>
+            <a href="/admin/miniatures?action=delete&id=<?= $m['id'] ?>" class="admin-miniatures-act admin-miniatures-act-danger"
+               title="Excluir" onclick="return confirm('Remover esta miniatura?')"><i class="fa fa-trash"></i></a>
+        </div>
+    </article>
+    <?php
+};
+?>
+
+<!-- Hero -->
+<section class="dash-hero admin-miniatures-hero">
+    <div class="dash-hero-id">
+        <div class="dash-hero-avatar admin-miniatures-hero-icon"><i class="fa fa-car-side"></i></div>
+        <div class="dash-hero-text">
+            <div class="lp-eyebrow">Coleção</div>
+            <h1 class="dash-hero-name">Minhas miniaturas</h1>
+            <div class="dash-hero-handle">Gerencie sua coleção.</div>
+        </div>
+    </div>
+    <div class="dash-hero-actions">
+        <a href="/admin/miniatures?action=add" class="md-btn md-btn-primary"><i class="fa fa-plus"></i>Adicionar miniatura</a>
+        <?php if ($admin_slug): ?>
+        <a href="/u/<?= e($admin_slug) ?>" target="_blank" class="md-btn"><i class="fa fa-warehouse"></i>Minha garagem pública</a>
+        <?php endif; ?>
+    </div>
+</section>
+
+<!-- Resumo -->
+<div class="cp-stats admin-miniatures-stats">
+    <div class="cp-stat">
+        <span class="cp-stat-num"><?= number_format($admin_all) ?></span>
+        <span class="cp-stat-lbl">miniatura<?= $admin_all !== 1 ? 's' : '' ?></span>
+    </div>
+    <div class="cp-stat">
+        <span class="cp-stat-num"><?= number_format($admin_pub) ?></span>
+        <span class="cp-stat-lbl">pública<?= $admin_pub !== 1 ? 's' : '' ?></span>
+    </div>
+    <div class="cp-stat">
+        <span class="cp-stat-num"><?= number_format($admin_prv) ?></span>
+        <span class="cp-stat-lbl">privada<?= $admin_prv !== 1 ? 's' : '' ?></span>
+    </div>
+    <div class="cp-stat">
+        <span class="cp-stat-num"><?= number_format($admin_wish) ?></span>
+        <span class="cp-stat-lbl">wishlist</span>
+    </div>
 </div>
 
-<!-- Filters -->
-<form method="get" class="mb-3">
-    <input type="hidden" name="action" value="list">
-    <div class="row g-2">
-        <div class="col-12 col-md-4">
-            <input type="search" name="search" class="form-control form-control-sm bg-dark text-light border-secondary"
-                   placeholder="Buscar..." value="<?= e($filters['search']) ?>">
+<!-- Barra de ferramentas: filtros + modo de visualização -->
+<div class="admin-miniatures-toolbar">
+    <button type="button" class="admin-miniatures-toolbtn<?= $admin_open_filters ? ' is-open' : '' ?>" id="btnFilters"
+            aria-expanded="<?= $admin_open_filters ? 'true' : 'false' ?>" aria-controls="adminFilters">
+        <i class="fa fa-sliders"></i>
+        <span>Busca e filtros</span>
+        <i class="fa fa-chevron-down admin-miniatures-caret"></i>
+    </button>
+    <div class="admin-miniatures-toolbar-spacer">
+        <span class="admin-miniatures-count"><?= number_format($admin_total) ?> resultado<?= $admin_total !== 1 ? 's' : '' ?></span>
+        <?php
+        $view_grid_qs = $admin_qs; unset($view_grid_qs['view']);
+        $view_list_qs = $admin_qs; $view_list_qs['view'] = 'list';
+        $view_grid_url = '/admin/miniatures?' . http_build_query(['action' => 'list'] + $view_grid_qs);
+        $view_list_url = '/admin/miniatures?' . http_build_query(['action' => 'list'] + $view_list_qs);
+        ?>
+        <div class="admin-miniatures-viewtoggle" role="group" aria-label="Modo de visualização">
+            <a href="<?= e($view_grid_url) ?>" class="admin-miniatures-viewbtn<?= $admin_view === 'grid' ? ' is-active' : '' ?>" title="Grade"><i class="fa fa-grip"></i></a>
+            <a href="<?= e($view_list_url) ?>" class="admin-miniatures-viewbtn<?= $admin_view === 'list' ? ' is-active' : '' ?>" title="Lista"><i class="fa fa-list"></i></a>
         </div>
-        <div class="col-6 col-md-2">
-            <select name="manufacturer" class="form-select form-select-sm bg-dark text-light border-secondary">
+    </div>
+</div>
+
+<!-- Painel de filtros (colapsável; persiste via ?filters=1) -->
+<div id="adminFilters" class="admin-miniatures-filters<?= $admin_open_filters ? ' is-open' : '' ?>">
+    <form method="get" class="admin-miniatures-form">
+        <input type="hidden" name="action" value="list">
+        <input type="hidden" name="filters" id="hidFilters" value="1"<?= $admin_open_filters ? '' : ' disabled' ?>>
+        <?php if ($admin_view === 'list'): ?><input type="hidden" name="view" value="list"><?php endif; ?>
+        <div class="admin-miniatures-search">
+            <i class="fa fa-magnifying-glass"></i>
+            <input type="search" name="search" placeholder="Buscar por nome, fabricante ou modelo..." value="<?= e($filters['search']) ?>">
+        </div>
+        <div class="admin-miniatures-controls">
+            <select name="manufacturer" class="admin-miniatures-select">
                 <option value="">Fabricante</option>
-                <?php foreach ($manufacturers as $m): ?>
-                    <option value="<?= e($m) ?>" <?= $filters['manufacturer'] === $m ? 'selected' : '' ?>><?= e($m) ?></option>
+                <?php foreach ($manufacturers as $mf): ?>
+                    <option value="<?= e($mf) ?>" <?= ($filters['manufacturer'] ?? '') === $mf ? 'selected' : '' ?>><?= e($mf) ?></option>
                 <?php endforeach; ?>
             </select>
-        </div>
-        <div class="col-6 col-md-2">
-            <select name="category_id" class="form-select form-select-sm bg-dark text-light border-secondary">
+            <select name="scale" class="admin-miniatures-select">
+                <option value="">Escala</option>
+                <?php foreach ($scales as $sc): ?>
+                    <option value="<?= e($sc) ?>" <?= ($filters['scale'] ?? '') === $sc ? 'selected' : '' ?>><?= e($sc) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <select name="category_id" class="admin-miniatures-select">
                 <option value="">Categoria</option>
                 <?php foreach ($categories as $cat): ?>
                     <option value="<?= $cat['id'] ?>" <?= (int)($filters['category_id'] ?? 0) === (int)$cat['id'] ? 'selected' : '' ?>><?= e($cat['name']) ?></option>
                 <?php endforeach; ?>
             </select>
-        </div>
-        <div class="col-6 col-md-2">
-            <select name="condition" class="form-select form-select-sm bg-dark text-light border-secondary">
+            <select name="condition" class="admin-miniatures-select">
                 <option value="">Embalagem</option>
                 <option value="sealed" <?= ($filters['condition'] ?? '') === 'sealed' ? 'selected' : '' ?>>Lacrada</option>
                 <option value="open"   <?= ($filters['condition'] ?? '') === 'open'   ? 'selected' : '' ?>>Aberta</option>
+                <option value="no_box" <?= ($filters['condition'] ?? '') === 'no_box' ? 'selected' : '' ?>>Sem caixa</option>
             </select>
-        </div>
-        <div class="col-6 col-md-2">
-            <select name="location" class="form-select form-select-sm bg-dark text-light border-secondary">
+            <select name="location" class="admin-miniatures-select">
                 <option value="">Localização</option>
                 <option value="storage" <?= ($filters['location'] ?? '') === 'storage' ? 'selected' : '' ?>>Armazenada</option>
                 <option value="display" <?= ($filters['location'] ?? '') === 'display' ? 'selected' : '' ?>>Em exposição</option>
             </select>
+            <select name="sort" class="admin-miniatures-select">
+                <option value="" <?= ($filters['sort'] ?? '') === '' ? 'selected' : '' ?>>Mais relevantes</option>
+                <option value="recent" <?= ($filters['sort'] ?? '') === 'recent' ? 'selected' : '' ?>>Mais recente</option>
+                <option value="name" <?= ($filters['sort'] ?? '') === 'name' ? 'selected' : '' ?>>Nome A–Z</option>
+                <option value="manufacturer" <?= ($filters['sort'] ?? '') === 'manufacturer' ? 'selected' : '' ?>>Fabricante</option>
+                <option value="year_desc" <?= ($filters['sort'] ?? '') === 'year_desc' ? 'selected' : '' ?>>Ano (novo→antigo)</option>
+                <option value="year_asc" <?= ($filters['sort'] ?? '') === 'year_asc' ? 'selected' : '' ?>>Ano (antigo→novo)</option>
+            </select>
+            <button type="submit" class="md-btn md-btn-primary admin-miniatures-apply"><i class="fa fa-arrow-right"></i><span>Aplicar</span></button>
+            <a href="/admin/miniatures" class="md-btn admin-miniatures-clear" title="Limpar"><i class="fa fa-rotate-left"></i></a>
         </div>
-        <div class="col-6 col-md-2 d-flex gap-1">
-            <button type="submit" class="btn btn-warning btn-sm flex-grow-1"><i class="fa fa-search"></i></button>
-            <a href="/admin/miniatures" class="btn btn-outline-secondary btn-sm"><i class="fa fa-times"></i></a>
-        </div>
-    </div>
-</form>
+    </form>
+</div>
 
-<div class="table-responsive">
+<!-- Grade / Lista -->
 <form method="post" action="/admin/miniatures?action=bulk" id="bulkForm">
     <?= csrf_field() ?>
     <input type="hidden" name="return_page" value="<?= $admin_page ?>">
-    <!-- Bulk toolbar (hidden until selection) -->
-    <div id="bulkBar" class="d-none mb-2 p-2 rounded border border-warning d-flex align-items-center gap-2 flex-wrap"
-         style="background:rgba(255,193,7,.07)">
-        <span id="bulkCount" class="text-warning fw-semibold small"></span>
-        <select name="bulk_action" class="form-select form-select-sm bg-dark text-light border-secondary" style="width:auto;">
+
+    <!-- Barra de ações em massa (oculta até haver seleção) -->
+    <div id="bulkBar" class="admin-miniatures-bulk d-none">
+        <span id="bulkCount" class="admin-miniatures-bulk-count"></span>
+        <select name="bulk_action" class="admin-miniatures-select">
             <option value="">Escolher ação…</option>
             <optgroup label="Visibilidade">
                 <option value="make_public">Tornar pública</option>
@@ -361,96 +524,37 @@ require_once __DIR__ . '/../includes/header_admin.php';
                 <option value="status_storage">Em armazenamento</option>
             </optgroup>
         </select>
-        <button type="submit" class="btn btn-warning btn-sm"
-                onclick="return confirm('Aplicar à seleção?')">Aplicar</button>
-        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearSelection()">Cancelar</button>
+        <button type="submit" class="md-btn md-btn-primary" onclick="return confirm('Aplicar à seleção?')">Aplicar</button>
+        <button type="button" class="md-btn" onclick="clearSelection()">Cancelar</button>
     </div>
-    <table class="table table-dark table-hover table-sm align-middle">
-        <thead>
-            <tr>
-                <th style="width:36px">
-                    <input type="checkbox" class="form-check-input" id="checkAll" title="Selecionar todos">
-                </th>
-                <th style="width:60px"></th>
-                <th>Nome</th>
-                <th>Fabricante</th>
-                <th>Escala</th>
-                <th>Embalagem</th>
-                <th>Local</th>
-                <th>Visível</th>
-                <th title="Destaque"><i class="fa fa-star text-warning"></i></th>
-                <th class="text-end">Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php if (empty($miniatures)): ?>
-                <tr><td colspan="10" class="text-center text-secondary py-4">Nenhuma miniatura cadastrada.</td></tr>
-            <?php endif; ?>
-            <?php foreach ($miniatures as $m): ?>
-                <tr>
-                    <td><input type="checkbox" class="form-check-input row-check" name="ids[]" value="<?= $m['id'] ?>"></td>
-                    <td>
-                        <img src="<?= e(thumb_url($m['primary_photo'])) ?>"
-                             data-fallback="<?= e(photo_url($m['primary_photo'])) ?>"
-                             alt=""
-                             style="width:50px;height:40px;object-fit:cover;border-radius:4px;">
-                    </td>
-                    <td><?= e($m['name']) ?></td>
-                    <td><?= e($m['manufacturer']) ?></td>
-                    <td><?= e($m['scale'] ?? '—') ?></td>
-                    <td><?= condition_badge($m['condition'] ?? 'sealed') ?></td>
-                    <td><?= location_badge($m['location'] ?? 'storage') ?></td>
-                    <td>
-                        <?php if ($m['is_public']): ?>
-                            <span class="badge bg-success"><i class="fa fa-eye"></i></span>
-                        <?php else: ?>
-                            <span class="badge bg-secondary"><i class="fa fa-eye-slash"></i></span>
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <button type="button"
-                                class="btn btn-sm btn-link p-0 toggle-featured-btn"
-                                data-id="<?= $m['id'] ?>"
-                                data-featured="<?= (int)($m['is_featured'] ?? 0) ?>"
-                                title="<?= ($m['is_featured'] ?? 0) ? 'Remover destaque' : 'Destacar' ?>">
-                            <i class="fa fa-star <?= ($m['is_featured'] ?? 0) ? 'text-warning' : 'text-secondary opacity-25' ?>"></i>
-                        </button>
-                    </td>
-                    <td class="text-end">
-                        <a href="/admin/miniatures?action=view&id=<?= $m['id'] ?>" class="btn btn-outline-info btn-sm" title="Ver detalhes">
-                            <i class="fa fa-circle-info"></i>
-                        </a>
-                        <a href="/admin/miniatures?action=edit&id=<?= $m['id'] ?>&return_page=<?= $admin_page ?>" class="btn btn-outline-warning btn-sm">
-                            <i class="fa fa-edit"></i>
-                        </a>
-                        <a href="<?= e(mini_url($m)) ?>" target="_blank" class="btn btn-outline-secondary btn-sm">
-                            <i class="fa fa-eye"></i>
-                        </a>
-                        <a href="/admin/miniatures?action=delete&id=<?= $m['id'] ?>"
-                           class="btn btn-outline-danger btn-sm"
-                           onclick="return confirm('Remover esta miniatura?')">
-                            <i class="fa fa-trash"></i>
-                        </a>
-                    </td>
-                </tr>
-            <?php endforeach; ?>
-        </tbody>
-    </table>
-</form>
-</div>
 
-<?php if ($admin_total_pages > 1):
-    $qs_parts = ['action' => 'list'];
-    foreach (['search','manufacturer','category_id','status'] as $k) {
-        if (!empty($filters[$k])) $qs_parts[$k] = $filters[$k];
-    }
-    $qs_base = '&' . http_build_query(array_diff_key($qs_parts, ['action' => '']));
-?>
-<nav class="mt-3" aria-label="Paginação">
+    <div class="admin-miniatures-selectall">
+        <label><input type="checkbox" class="form-check-input" id="checkAll"> Selecionar todos</label>
+    </div>
+
+    <?php if (empty($miniatures)): ?>
+        <div class="admin-miniatures-empty">
+            <i class="fa fa-car-side"></i>
+            <p class="admin-miniatures-empty-title"><?= $admin_active_filters ? 'Nenhuma miniatura encontrada' : 'Sua garagem está vazia' ?></p>
+            <p class="admin-miniatures-empty-sub"><?= $admin_active_filters ? 'Tente ajustar os filtros ou limpar a busca.' : 'Comece adicionando sua primeira peça.' ?></p>
+            <?php if ($admin_active_filters): ?>
+                <a href="/admin/miniatures" class="md-btn"><i class="fa fa-rotate-left"></i>Limpar filtros</a>
+            <?php else: ?>
+                <a href="/admin/miniatures?action=add" class="md-btn md-btn-primary"><i class="fa fa-plus"></i>Adicionar miniatura</a>
+            <?php endif; ?>
+        </div>
+    <?php else: ?>
+        <div class="admin-miniatures-<?= $admin_view === 'list' ? 'list' : 'grid' ?>">
+            <?php foreach ($miniatures as $m) { $render_item($m); } ?>
+        </div>
+    <?php endif; ?>
+</form>
+
+<?php if ($admin_total_pages > 1): ?>
+<nav class="mt-4" aria-label="Paginação">
     <ul class="pagination pagination-sm justify-content-center flex-wrap">
         <li class="page-item <?= $admin_page <= 1 ? 'disabled' : '' ?>">
-            <a class="page-link bg-dark border-secondary text-light"
-               href="?action=list&page=<?= $admin_page - 1 . $qs_base ?>">&laquo;</a>
+            <a class="page-link bg-dark border-secondary text-light" href="<?= e($pg_base . '&page=' . ($admin_page - 1)) ?>">&laquo;</a>
         </li>
         <?php foreach (pagination_range($admin_page, $admin_total_pages) as $p): ?>
             <?php if ($p === null): ?>
@@ -458,13 +562,12 @@ require_once __DIR__ . '/../includes/header_admin.php';
             <?php else: ?>
                 <li class="page-item <?= $p === $admin_page ? 'active' : '' ?>">
                     <a class="page-link <?= $p === $admin_page ? 'bg-warning border-warning text-dark' : 'bg-dark border-secondary text-light' ?>"
-                       href="?action=list&page=<?= $p . $qs_base ?>"><?= $p ?></a>
+                       href="<?= e($pg_base . '&page=' . $p) ?>"><?= $p ?></a>
                 </li>
             <?php endif; ?>
         <?php endforeach; ?>
         <li class="page-item <?= $admin_page >= $admin_total_pages ? 'disabled' : '' ?>">
-            <a class="page-link bg-dark border-secondary text-light"
-               href="?action=list&page=<?= $admin_page + 1 . $qs_base ?>">&raquo;</a>
+            <a class="page-link bg-dark border-secondary text-light" href="<?= e($pg_base . '&page=' . ($admin_page + 1)) ?>">&raquo;</a>
         </li>
     </ul>
 </nav>
@@ -472,6 +575,19 @@ require_once __DIR__ . '/../includes/header_admin.php';
 
 <script>
 (function () {
+    // ── Painel de filtros (colapso + persistência) ───────────────────────────
+    const btnFilters = document.getElementById('btnFilters');
+    const panel      = document.getElementById('adminFilters');
+    const hidFilters = document.getElementById('hidFilters');
+    if (btnFilters && panel) {
+        btnFilters.addEventListener('click', () => {
+            const open = panel.classList.toggle('is-open');
+            btnFilters.classList.toggle('is-open', open);
+            btnFilters.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (hidFilters) hidFilters.disabled = !open;
+        });
+    }
+
     // ── Featured toggle ──────────────────────────────────────────────────────
     document.querySelectorAll('.toggle-featured-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -485,7 +601,8 @@ require_once __DIR__ . '/../includes/header_admin.php';
             if (data.ok) {
                 btn.dataset.featured = data.is_featured;
                 btn.title = data.is_featured ? 'Remover destaque' : 'Destacar';
-                icon.className = 'fa fa-star ' + (data.is_featured ? 'text-warning' : 'text-secondary opacity-25');
+                icon.className = 'fa fa-star ' + (data.is_featured ? 'text-warning' : '');
+                btn.closest('.admin-miniatures-card')?.classList.toggle('is-featured', !!data.is_featured);
             }
         });
     });
@@ -502,11 +619,9 @@ require_once __DIR__ . '/../includes/header_admin.php';
         const checked = getChecked();
         if (checked.length > 0) {
             bar.classList.remove('d-none');
-            bar.classList.add('d-flex');
             countEl.textContent = checked.length + ' selecionada' + (checked.length !== 1 ? 's' : '');
         } else {
             bar.classList.add('d-none');
-            bar.classList.remove('d-flex');
         }
     }
     function clearSelection() {

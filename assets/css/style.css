@@ -3644,3 +3644,458 @@ body.admin-layout {
   color: var(--ink-secondary);
   margin: 0 0 1.25rem;
 }
+
+/* ═══ Minhas miniaturas — gestão da garagem (admin-miniatures-*) ════════
+   Reaproveita dash-hero, cp-stats, md-pill, md-btn. Escopo .admin-miniatures-*.
+═════════════════════════════════════════════════════════════════════ */
+.admin-miniatures-hero-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  color: var(--amber-core);
+  background: var(--amber-glow);
+  border: 1px solid var(--line-amber);
+}
+.admin-miniatures-stats {
+  margin-bottom: 1.25rem;
+}
+
+/* Barra de ferramentas */
+.admin-miniatures-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.admin-miniatures-toolbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  color: var(--ink-secondary);
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
+}
+.admin-miniatures-toolbtn:hover,
+.admin-miniatures-toolbtn.is-open {
+  border-color: var(--line-amber);
+  color: var(--ink-primary);
+}
+.admin-miniatures-caret {
+  font-size: 0.7rem;
+  transition: transform 0.2s;
+}
+.admin-miniatures-toolbtn.is-open .admin-miniatures-caret {
+  transform: rotate(180deg);
+}
+.admin-miniatures-toolbar-spacer {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto;
+}
+.admin-miniatures-count {
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.admin-miniatures-viewtoggle {
+  display: inline-flex;
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  padding: 0.2rem;
+  gap: 0.2rem;
+}
+.admin-miniatures-viewbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 1.9rem;
+  border-radius: var(--radius-pill);
+  color: var(--ink-muted);
+  text-decoration: none;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.admin-miniatures-viewbtn:hover {
+  color: var(--ink-primary);
+}
+.admin-miniatures-viewbtn.is-active {
+  background: var(--amber-core);
+  color: var(--surface-base);
+}
+
+/* Painel de filtros colapsável */
+.admin-miniatures-filters {
+  display: none;
+  margin-bottom: 1.25rem;
+}
+.admin-miniatures-filters.is-open {
+  display: block;
+}
+.admin-miniatures-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+}
+.admin-miniatures-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.admin-miniatures-search i {
+  position: absolute;
+  left: 0.9rem;
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+.admin-miniatures-search input {
+  width: 100%;
+  background: var(--surface-base);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  color: var(--ink-primary);
+  padding: 0.6rem 1rem 0.6rem 2.3rem;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.admin-miniatures-search input:focus {
+  border-color: var(--amber-core);
+}
+.admin-miniatures-search input::placeholder {
+  color: var(--ink-muted);
+}
+.admin-miniatures-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.admin-miniatures-select {
+  flex: 1 1 130px;
+  background: var(--surface-base);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  color: var(--ink-secondary);
+  padding: 0.55rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
+}
+.admin-miniatures-select:hover,
+.admin-miniatures-select:focus {
+  border-color: var(--line-amber);
+  color: var(--ink-primary);
+}
+.admin-miniatures-apply {
+  flex: 0 0 auto;
+}
+.admin-miniatures-clear {
+  flex: 0 0 auto;
+}
+
+/* Ações em massa */
+.admin-miniatures-bulk {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  background: var(--amber-glow);
+  border: 1px solid var(--line-amber);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.85rem;
+  margin-bottom: 0.85rem;
+}
+.admin-miniatures-bulk.d-none {
+  display: none;
+}
+.admin-miniatures-bulk-count {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--amber-core);
+}
+.admin-miniatures-bulk .admin-miniatures-select {
+  flex: 0 0 auto;
+}
+.admin-miniatures-selectall {
+  margin-bottom: 0.85rem;
+}
+.admin-miniatures-selectall label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+/* Grade */
+.admin-miniatures-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+/* Card */
+.admin-miniatures-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition:
+    border-color 0.2s,
+    transform 0.2s,
+    box-shadow 0.2s;
+}
+.admin-miniatures-card:hover {
+  border-color: var(--line-amber);
+  transform: translateY(-3px);
+  box-shadow: var(--elev-2);
+}
+.admin-miniatures-card.is-featured {
+  border-color: var(--line-amber);
+}
+.admin-miniatures-check {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+  z-index: 2;
+  margin: 0;
+  background: rgba(13, 15, 19, 0.65);
+  border-radius: var(--radius-sm);
+  padding: 0.2rem 0.3rem;
+  line-height: 0;
+  cursor: pointer;
+}
+.admin-miniatures-fav {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  background: rgba(13, 15, 19, 0.65);
+  border: none;
+  border-radius: 50%;
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.admin-miniatures-fav:hover {
+  color: var(--amber-bright);
+}
+.admin-miniatures-thumb {
+  position: relative;
+  display: block;
+  aspect-ratio: 4 / 3;
+  background: var(--surface-base);
+  overflow: hidden;
+}
+.admin-miniatures-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.admin-miniatures-vis {
+  position: absolute;
+  bottom: 0.5rem;
+  left: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  border-radius: var(--radius-pill);
+  padding: 0.15rem 0.5rem;
+}
+.admin-miniatures-vis-on {
+  color: var(--state-loose);
+  background: rgba(34, 197, 94, 0.16);
+}
+.admin-miniatures-vis-off {
+  color: var(--ink-secondary);
+  background: rgba(13, 15, 19, 0.7);
+}
+.admin-miniatures-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 0.85rem 0.9rem 0.5rem;
+}
+.admin-miniatures-maker {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--amber-core);
+  margin-bottom: 0.15rem;
+}
+.admin-miniatures-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+  margin: 0 0 0.55rem;
+  line-height: 1.3;
+}
+.admin-miniatures-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.6rem;
+}
+.admin-miniatures-pills .md-pill {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.55rem;
+}
+.admin-miniatures-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: auto;
+  padding-top: 0.4rem;
+  font-size: 0.74rem;
+  color: var(--ink-muted);
+}
+.admin-miniatures-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.admin-miniatures-acts {
+  display: flex;
+  border-top: 1px solid var(--line-strong);
+}
+.admin-miniatures-act {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 0;
+  color: var(--ink-muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.admin-miniatures-act:hover {
+  background: var(--surface-inlay);
+  color: var(--ink-primary);
+}
+.admin-miniatures-act-danger:hover {
+  color: var(--state-want);
+}
+.admin-miniatures-act + .admin-miniatures-act {
+  border-left: 1px solid var(--line-strong);
+}
+
+/* Lista (cards horizontais) */
+.admin-miniatures-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.admin-miniatures-list .admin-miniatures-card {
+  flex-direction: row;
+  align-items: stretch;
+}
+.admin-miniatures-list .admin-miniatures-check {
+  top: 50%;
+  left: 0.6rem;
+  transform: translateY(-50%);
+}
+.admin-miniatures-list .admin-miniatures-fav {
+  top: 0.55rem;
+  right: 0.55rem;
+}
+.admin-miniatures-list .admin-miniatures-thumb {
+  flex: 0 0 120px;
+  aspect-ratio: auto;
+}
+.admin-miniatures-list .admin-miniatures-vis-text {
+  display: none;
+}
+.admin-miniatures-list .admin-miniatures-body {
+  padding: 0.7rem 0.9rem;
+}
+.admin-miniatures-list .admin-miniatures-acts {
+  border-top: none;
+  border-left: 1px solid var(--line-strong);
+  flex-direction: column;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.admin-miniatures-list .admin-miniatures-act {
+  flex: 1 1 0;
+  width: 3rem;
+}
+.admin-miniatures-list .admin-miniatures-act + .admin-miniatures-act {
+  border-left: none;
+  border-top: 1px solid var(--line-strong);
+}
+
+/* Estado vazio */
+.admin-miniatures-empty {
+  text-align: center;
+  background: var(--surface-raised);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-lg);
+  padding: 3rem 1.5rem;
+}
+.admin-miniatures-empty i {
+  font-size: 2.2rem;
+  color: var(--amber-deep);
+  margin-bottom: 1rem;
+}
+.admin-miniatures-empty-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+  margin: 0 0 0.35rem;
+}
+.admin-miniatures-empty-sub {
+  color: var(--ink-secondary);
+  margin: 0 0 1.25rem;
+}
+
+@media (max-width: 575.98px) {
+  .admin-miniatures-toolbar-spacer {
+    width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+  }
+  .admin-miniatures-select {
+    flex: 1 1 100%;
+  }
+  .admin-miniatures-list .admin-miniatures-thumb {
+    flex-basis: 92px;
+  }
+}
