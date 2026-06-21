@@ -3349,3 +3349,298 @@ body.admin-layout {
   gap: 0.3rem;
   flex-shrink: 0;
 }
+
+/* ═══ Explorar coleções — descoberta de garagens (collections-*) ═══════
+   Reaproveita tokens Asfalto + componentes lp-/md-. Escopo .collections-*.
+═════════════════════════════════════════════════════════════════════ */
+.collections-hero {
+  text-align: center;
+  background:
+    radial-gradient(120% 160% at 50% 0%, var(--amber-glow), transparent 60%),
+    var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  padding: 2.5rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.collections-hero .lp-eyebrow {
+  margin-bottom: 0.6rem;
+}
+.collections-hero-title {
+  font-size: clamp(1.8rem, 4.5vw, 2.8rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink-primary);
+  margin: 0 0 0.6rem;
+  line-height: 1.1;
+}
+.collections-hero-sub {
+  font-size: 1rem;
+  color: var(--ink-secondary);
+  max-width: 540px;
+  margin: 0 auto 1.4rem;
+  line-height: 1.7;
+}
+.collections-hero-cta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+.collections-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 1.75rem;
+}
+.collections-search {
+  position: relative;
+  flex: 1 1 260px;
+  display: flex;
+  align-items: center;
+}
+.collections-search i {
+  position: absolute;
+  left: 0.9rem;
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+.collections-search input {
+  width: 100%;
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  color: var(--ink-primary);
+  padding: 0.6rem 1rem 0.6rem 2.3rem;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.collections-search input:focus {
+  border-color: var(--amber-core);
+}
+.collections-search input::placeholder {
+  color: var(--ink-muted);
+}
+.collections-toolbar-controls {
+  display: flex;
+  gap: 0.6rem;
+}
+.collections-select {
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  color: var(--ink-secondary);
+  padding: 0.6rem 1rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
+}
+.collections-select:focus,
+.collections-select:hover {
+  border-color: var(--line-amber);
+  color: var(--ink-primary);
+}
+.collections-apply {
+  flex-shrink: 0;
+}
+@media (max-width: 575.98px) {
+  .collections-toolbar-controls {
+    width: 100%;
+  }
+  .collections-select {
+    flex: 1 1 auto;
+  }
+  .collections-apply-text {
+    display: none;
+  }
+}
+
+.collections-section {
+  margin-bottom: 2rem;
+}
+.collections-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.collections-count {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--amber-core);
+  background: var(--amber-glow);
+  border: 1px solid var(--line-amber);
+  border-radius: var(--radius-pill);
+  padding: 0.25rem 0.7rem;
+  white-space: nowrap;
+}
+.collections-muted {
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+}
+
+.collections-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.collections-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  transition:
+    border-color 0.2s,
+    transform 0.2s,
+    box-shadow 0.2s;
+}
+.collections-card:hover {
+  border-color: var(--line-amber);
+  transform: translateY(-4px);
+  box-shadow: var(--elev-2);
+}
+.collections-card.is-featured {
+  border-color: var(--line-amber);
+  background:
+    radial-gradient(120% 120% at 100% 0%, var(--amber-glow), transparent 55%),
+    var(--surface-raised);
+}
+.collections-badge {
+  position: absolute;
+  top: 0.9rem;
+  right: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--surface-base);
+  background: var(--amber-core);
+  border-radius: var(--radius-pill);
+  padding: 0.2rem 0.55rem;
+}
+.collections-card-top {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 0.85rem;
+}
+.collections-card-avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 2px solid var(--line-strong);
+  background: var(--surface-base);
+}
+.collections-card-initial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--amber-core);
+  color: var(--surface-base);
+  font-weight: 800;
+  font-size: 1.6rem;
+  border-color: var(--line-amber);
+}
+.collections-card-id {
+  min-width: 0;
+}
+.collections-card-name {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--ink-primary);
+  margin: 0;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.collections-card-handle {
+  font-size: 0.8rem;
+  color: var(--amber-core);
+  font-weight: 600;
+}
+.collections-card-bio {
+  font-size: 0.85rem;
+  color: var(--ink-secondary);
+  line-height: 1.5;
+  margin: 0 0 0.85rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.collections-card-brands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.9rem;
+}
+.collections-brand {
+  font-size: 0.72rem;
+  padding: 0.25rem 0.6rem;
+}
+.collections-brand i {
+  font-size: 0.66rem;
+}
+.collections-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-top: auto;
+  padding-top: 0.4rem;
+}
+.collections-card-count {
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+}
+.collections-card-count strong {
+  color: var(--amber-core);
+  font-size: 1rem;
+  font-weight: 800;
+}
+.collections-card-btn {
+  padding: 0.45rem 0.9rem;
+  font-size: 0.8rem;
+}
+
+.collections-empty {
+  text-align: center;
+  background: var(--surface-raised);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-lg);
+  padding: 3rem 1.5rem;
+}
+.collections-empty i {
+  font-size: 2.2rem;
+  color: var(--amber-deep);
+  margin-bottom: 1rem;
+}
+.collections-empty-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+  margin: 0 0 0.35rem;
+}
+.collections-empty-sub {
+  color: var(--ink-secondary);
+  margin: 0 0 1.25rem;
+}

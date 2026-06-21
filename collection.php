@@ -288,7 +288,7 @@ require_once __DIR__ . '/includes/header_public.php';
             $cp_cond  = $mini['condition'] ?? 'sealed';
             $cp_mtags = array_slice($cp_tags_map[(int) $mini['id']] ?? [], 0, 2);
         ?>
-            <div class="col lp-animate" style="--lp-delay:<?= number_format(($cp_i++ % 10) * 0.04, 2) ?>s">
+            <div class="col lp-animate" style="--lp-delay:<?= number_format(($cp_i++ % 12) * 0.04, 2) ?>s">
                 <a href="<?= e(mini_url($mini)) ?>" class="cp-card">
                     <div class="cp-card-photo">
                         <img src="<?= e(thumb_url($mini['primary_photo'])) ?>"
