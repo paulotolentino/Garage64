@@ -1119,6 +1119,7 @@ function get_user_notifications(int $user_id, int $limit = 50): array {
             'SELECT n.id, n.user_id, n.actor_user_id, n.type, n.miniature_id, n.comment_id,
                     n.target_url, n.is_read, n.created_at,
                     a.display_name AS actor_name, a.username AS actor_username, a.slug AS actor_slug,
+                    a.avatar AS actor_avatar,
                     m.name AS miniature_name
              FROM notifications n
              JOIN admin_users a ON a.id = n.actor_user_id
