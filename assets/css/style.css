@@ -5122,3 +5122,275 @@ body.admin-layout {
     min-height: 100vh;
   }
 }
+
+/* ═══ Perfil do colecionador (profile-*) ═══════════════════════════════
+   Reaproveita dash-hero, cp-stats, lp-eyebrow, lp-feature-card, md-btn,
+   amf-input/amf-textarea. Escopo .profile-*.
+═════════════════════════════════════════════════════════════════════ */
+.profile-hero {
+  margin-bottom: 1.25rem;
+}
+.profile-hero-avatar {
+  overflow: hidden;
+  padding: 0;
+}
+.profile-hero-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.profile-hero-initial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--amber-core);
+  background: var(--amber-glow);
+}
+.profile-stats {
+  margin-bottom: 1.25rem;
+}
+.profile-hero-actions button {
+  cursor: pointer;
+}
+#btnCopyLink.is-copied,
+.profile-url-copy.is-copied {
+  border-color: var(--state-loose);
+  color: var(--state-loose);
+}
+
+/* Alertas */
+.profile-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border-radius: var(--radius-md);
+  padding: 0.75rem 0.95rem;
+  font-size: 0.9rem;
+  margin-bottom: 1.1rem;
+}
+.profile-alert-ok {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  color: var(--state-loose);
+}
+.profile-alert-error {
+  background: rgba(236, 72, 153, 0.1);
+  border: 1px solid rgba(236, 72, 153, 0.4);
+  color: #f9a8d4;
+}
+
+/* Seções */
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.profile-section {
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.profile-garage {
+  margin-top: 1rem;
+}
+.profile-section-head {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1rem 1.15rem;
+  border-bottom: 1px solid var(--line-strong);
+}
+.profile-section-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--amber-glow);
+  color: var(--amber-core);
+  font-size: 1rem;
+}
+.profile-section-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--ink-primary);
+  margin: 0.1rem 0 0;
+  line-height: 1.2;
+}
+.profile-section-body {
+  padding: 1.15rem;
+}
+
+/* Avatar */
+.profile-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  margin-bottom: 1.25rem;
+}
+.profile-avatar-preview {
+  width: 88px;
+  height: 88px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--line-amber);
+  background: var(--surface-base);
+}
+.profile-avatar-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.profile-avatar-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.profile-avatar-btn {
+  width: fit-content;
+  cursor: pointer;
+}
+.profile-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+
+/* Campos */
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.85rem;
+}
+.profile-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.profile-field-wide {
+  grid-column: span 2;
+}
+.profile-field label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+.profile-help {
+  font-size: 0.74rem;
+  color: var(--ink-muted);
+}
+.profile-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+  margin: 0 0 0.9rem;
+}
+.profile-input-ro {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+.profile-input-prefix {
+  display: flex;
+  align-items: stretch;
+  background: var(--surface-base);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.profile-input-prefix:focus-within {
+  border-color: var(--amber-core);
+}
+.profile-prefix {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.7rem;
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+  background: var(--surface-raised);
+  border-right: 1px solid var(--line-strong);
+  white-space: nowrap;
+}
+.profile-input-prefix .amf-input {
+  border: none;
+  border-radius: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.profile-form-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+}
+
+/* Minha garagem */
+.profile-url {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--surface-base);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.85rem;
+  margin-bottom: 1.1rem;
+}
+.profile-url > i {
+  color: var(--amber-core);
+}
+.profile-url-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.88rem;
+  color: var(--ink-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.profile-url-copy {
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.profile-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.85rem;
+}
+.profile-shortcut {
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+}
+.profile-shortcut-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+.profile-shortcut-sub {
+  font-size: 0.8rem;
+  color: var(--ink-muted);
+  margin-top: 0.15rem;
+}
+
+@media (max-width: 575.98px) {
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+  .profile-field-wide {
+    grid-column: span 1;
+  }
+  .profile-shortcuts {
+    grid-template-columns: 1fr;
+  }
+}
