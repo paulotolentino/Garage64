@@ -1,8 +1,4 @@
 <?php
-// Show errors on this admin-only diagnostic page so we can catch issues
-ini_set('display_errors', '1');
-error_reporting(E_ALL);
-
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
@@ -105,6 +101,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
     verify_csrf();
     header('Content-Type: application/json');
 
+    // Result accumulators — initialized once, before any migration block runs.
+    $applied = [];
+    $errors  = [];
+    $skipped = [];
+
     // MySQL doesn't support CREATE INDEX IF NOT EXISTS — check information_schema first
     $indexes = [
         'idx_photos_miniature_primary' => ['miniature_photos', 'CREATE INDEX idx_photos_miniature_primary ON miniature_photos (miniature_id, is_primary)'],
@@ -197,10 +198,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
             $errors[] = 'table:' . $tbl . ': ' . $e->getMessage();
         }
     }
-
-    $applied = [];
-    $errors  = [];
-    $skipped = [];
 
     // ENUM expansions — always run MODIFY to ensure the ENUM includes all values
     $enum_mods = [
@@ -438,421 +435,407 @@ try {
     $db_error = $e->getMessage();
 }
 
-$page_title = 'Manução do Sistema';
+$opcache_available = function_exists('opcache_reset');
+
+$page_title = 'Manutenção do sistema';
 require_once __DIR__ . '/../includes/header_admin.php';
 ?>
 
-<div class="d-flex align-items-center mb-4 gap-2">
-    <h1 class="h4 mb-0"><i class="fa fa-wrench me-2 text-warning"></i>Manução do Sistema</h1>
+<div class="maint-hero dash-hero">
+    <div class="maint-hero-ico"><i class="fa fa-screwdriver-wrench"></i></div>
+    <div class="maint-hero-text">
+        <span class="lp-eyebrow">Painel técnico</span>
+        <h1 class="maint-hero-title">Manutenção do sistema</h1>
+        <p class="maint-hero-sub">Diagnóstico, otimização e migração. Algumas ações alteram o banco ou apagam arquivos — use com atenção.</p>
+    </div>
+</div>
+
+<div class="maint-diag">
+    <span class="maint-chip <?= empty($db_error) ? 'is-ok' : 'is-bad' ?>">
+        <i class="fa <?= empty($db_error) ? 'fa-circle-check' : 'fa-circle-xmark' ?>"></i>Banco de dados
+    </span>
+    <span class="maint-chip <?= $webp_support ? 'is-ok' : 'is-bad' ?>">
+        <i class="fa <?= $webp_support ? 'fa-circle-check' : 'fa-circle-xmark' ?>"></i>WebP (GD)
+    </span>
+    <span class="maint-chip <?= $opcache_available ? 'is-ok' : 'is-warn' ?>">
+        <i class="fa <?= $opcache_available ? 'fa-circle-check' : 'fa-circle-exclamation' ?>"></i>OPcache
+    </span>
 </div>
 
 <?php if (!empty($db_error)): ?>
-<div class="alert alert-danger">
-    <i class="fa fa-times-circle me-2"></i>
-    <strong>Erro de banco de dados:</strong> <?= h($db_error) ?>
+<div class="maint-alert maint-alert-error">
+    <i class="fa fa-circle-xmark"></i>
+    <span><strong>Erro de banco de dados:</strong> <?= h($db_error) ?></span>
 </div>
 <?php elseif (!$webp_support): ?>
-<div class="alert alert-danger">
-    <i class="fa fa-times-circle me-2"></i>
-    <strong>WebP não suportado.</strong>
-    A extensão GD do PHP não foi compilada com suporte a WebP neste servidor.
-    Entre em contato com seu provedor de hospedagem para habilitar o suporte.
+<div class="maint-alert maint-alert-error">
+    <i class="fa fa-circle-xmark"></i>
+    <span><strong>WebP não suportado.</strong> A extensão GD do PHP não foi compilada com suporte a WebP neste servidor. Entre em contato com seu provedor de hospedagem para habilitar o suporte.</span>
 </div>
-<?php else: ?>
-
-<div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
-        <div class="card bg-dark border-secondary text-center p-3">
-            <div class="h2 text-light"><?= $total ?></div>
-            <div class="text-secondary small">Total de fotos</div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="card bg-dark border-secondary text-center p-3">
-            <div class="h2 text-warning" id="stat-pending"><?= $pending ?></div>
-            <div class="text-secondary small">Pendentes</div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="card bg-dark border-secondary text-center p-3">
-            <div class="h2 text-success" id="stat-done"><?= $total - $pending ?></div>
-            <div class="text-secondary small">Já em WebP</div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="card bg-dark border-secondary text-center p-3">
-            <div class="h2 text-info"><?= WEBP_QUALITY ?></div>
-            <div class="text-secondary small">Qualidade WebP</div>
-        </div>
-    </div>
-</div>
-
-<?php if ($pending === 0): ?>
-<div class="alert alert-success">
-    <i class="fa fa-check-circle me-2"></i>
-    Todas as fotos já estão no formato WebP. Nenhuma migração necessária.
-</div>
-<?php else: ?>
-
-<div class="card bg-dark border-secondary mb-4">
-    <div class="card-body">
-        <p class="mb-1">
-            <strong class="text-warning"><?= $pending ?></strong> foto(s) serão convertidas para WebP.
-        </p>
-        <p class="text-secondary small mb-3">
-            Os arquivos originais são removidos após a conversão. O processo roda em lotes de 5 para não causar timeout.
-        </p>
-
-        <div id="progress-wrap" class="mb-3 d-none">
-            <div class="d-flex justify-content-between mb-1">
-                <span class="small text-secondary">Progresso</span>
-                <span id="progress-label" class="small text-light">0 / <?= $pending ?></span>
-            </div>
-            <div class="progress bg-secondary" style="height:10px">
-                <div id="progress-bar" class="progress-bar bg-warning" role="progressbar" style="width:0%"></div>
-            </div>
-        </div>
-
-        <div id="log" class="mb-3 bg-black rounded p-2 small font-monospace d-none"
-             style="max-height:200px; overflow-y:auto; border:1px solid #333"></div>
-
-        <div id="result-banner" class="d-none"></div>
-
-        <button id="btn-start" class="btn btn-warning">
-            <i class="fa fa-play me-1"></i>Iniciar Migração
-        </button>
-        <button id="btn-stop" class="btn btn-secondary ms-2 d-none">
-            <i class="fa fa-stop me-1"></i>Pausar
-        </button>
-    </div>
-</div>
-
-<script>
-(function () {
-    const CSRF_TOKEN   = <?= json_encode(csrf_token()) ?>;
-    const TOTAL        = <?= $pending ?>;
-    const BATCH_SIZE   = 5;
-
-    let totalConverted = 0;
-    let stopped        = false;
-
-    const btnStart  = document.getElementById('btn-start');
-    const btnStop   = document.getElementById('btn-stop');
-    const bar       = document.getElementById('progress-bar');
-    const label     = document.getElementById('progress-label');
-    const wrap      = document.getElementById('progress-wrap');
-    const log       = document.getElementById('log');
-    const banner    = document.getElementById('result-banner');
-    const statPend  = document.getElementById('stat-pending');
-    const statDone  = document.getElementById('stat-done');
-
-    function appendLog(msg, cls) {
-        const line = document.createElement('div');
-        line.className = cls || 'text-secondary';
-        line.textContent = msg;
-        log.appendChild(line);
-        log.scrollTop = log.scrollHeight;
-    }
-
-    function updateProgress(remaining) {
-        const done = TOTAL - remaining;
-        const pct  = TOTAL > 0 ? Math.round((done / TOTAL) * 100) : 100;
-        bar.style.width = pct + '%';
-        label.textContent = done + ' / ' + TOTAL;
-        statPend.textContent = remaining;
-        statDone.textContent = <?= $total ?> - remaining;
-    }
-
-    async function runBatch() {
-        const body = new URLSearchParams({
-            action:     'batch',
-            limit:      BATCH_SIZE,
-            csrf_token: CSRF_TOKEN,
-        });
-        const resp = await fetch('', { method: 'POST', body });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        return resp.json();
-    }
-
-    btnStart.addEventListener('click', async function () {
-        stopped = false;
-        btnStart.classList.add('d-none');
-        btnStop.classList.remove('d-none');
-        wrap.classList.remove('d-none');
-        log.classList.remove('d-none');
-        banner.classList.add('d-none');
-
-        let remaining = TOTAL - totalConverted;
-
-        while (!stopped && remaining > 0) {
-            try {
-                const data = await runBatch();
-                totalConverted += data.converted;
-                remaining       = data.remaining;
-
-                if (data.converted > 0) {
-                    appendLog('✓ ' + data.converted + ' foto(s) convertida(s)', 'text-success');
-                }
-                if (data.skipped > 0) {
-                    appendLog('⚠ ' + data.skipped + ' arquivo(s) não encontrado(s) no disco', 'text-warning');
-                }
-                if (data.errors && data.errors.length) {
-                    data.errors.forEach(function (e) {
-                        appendLog('✗ Falha: ' + e, 'text-danger');
-                    });
-                }
-
-                updateProgress(remaining);
-
-                if (data.done) break;
-
-                // Small pause between batches
-                await new Promise(function (r) { setTimeout(r, 300); });
-            } catch (err) {
-                appendLog('Erro na requisição: ' + err.message, 'text-danger');
-                break;
-            }
-        }
-
-        btnStop.classList.add('d-none');
-        btnStart.classList.remove('d-none');
-
-        if (remaining === 0) {
-            btnStart.disabled = true;
-            banner.innerHTML =
-                '<div class="alert alert-success">' +
-                '<i class="fa fa-check-circle me-2"></i>' +
-                '<strong>Migração concluída!</strong> ' + totalConverted + ' foto(s) convertida(s) para WebP.' +
-                '</div>';
-            banner.classList.remove('d-none');
-            appendLog('─── Migração concluída ───', 'text-success fw-bold');
-        } else if (stopped) {
-            appendLog('─── Pausado. Clique em Iniciar para continuar. ───', 'text-warning');
-        }
-    });
-
-    btnStop.addEventListener('click', function () { stopped = true; });
-})();
-</script>
-
-<?php endif; ?>
 <?php endif; ?>
 
-<!-- ─── THUMBNAILS ────────────────────────────────────────────────────────── -->
-<hr class="border-secondary mt-5">
-<h2 class="h5 mb-3"><i class="fa fa-th-large me-2 text-warning"></i>Geração de Thumbnails</h2>
-<div class="card bg-dark border-secondary mb-4">
-    <div class="card-body">
-        <p class="mb-1">
-            <strong class="text-warning"><?= $pending_thumbs ?? 0 ?></strong> foto(s) sem thumbnail gerado (<?= THUMB_WIDTH ?>px).
-        </p>
-        <p class="text-secondary small mb-3">
-            Novos uploads já geram thumbnail automaticamente.
-            Clique abaixo para gerar para as imagens existentes.
-        </p>
-        <div id="thumb-progress-wrap" class="mb-3 d-none">
-            <div class="d-flex justify-content-between mb-1">
-                <span class="small text-secondary">Progresso</span>
-                <span id="thumb-progress-label" class="small text-light">0 / <?= $pending_thumbs ?? 0 ?></span>
-            </div>
-            <div class="progress bg-secondary" style="height:10px">
-                <div id="thumb-progress-bar" class="progress-bar bg-warning" role="progressbar" style="width:0%"></div>
+<?php if (empty($db_error) && $webp_support): ?>
+<div class="maint-stats">
+    <div class="maint-stat">
+        <span class="maint-stat-num"><?= $total ?></span>
+        <span class="maint-stat-lbl">Total de fotos</span>
+    </div>
+    <div class="maint-stat">
+        <span class="maint-stat-num maint-amber" id="stat-pending"><?= $pending ?></span>
+        <span class="maint-stat-lbl">Pendentes</span>
+    </div>
+    <div class="maint-stat">
+        <span class="maint-stat-num maint-green" id="stat-done"><?= $total - $pending ?></span>
+        <span class="maint-stat-lbl">Já em WebP</span>
+    </div>
+    <div class="maint-stat">
+        <span class="maint-stat-num"><?= WEBP_QUALITY ?></span>
+        <span class="maint-stat-lbl">Qualidade WebP</span>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- ════ SAFE ZONE ════════════════════════════════════════════════════════ -->
+<section class="maint-zone">
+    <h2 class="maint-zone-title maint-zone-safe"><i class="fa fa-shield-halved"></i>Ações seguras</h2>
+
+    <article class="maint-card">
+        <div class="maint-card-head">
+            <span class="maint-card-ico"><i class="fa fa-images"></i></span>
+            <div class="maint-card-titlewrap">
+                <h3 class="maint-card-title">Geração de thumbnails</h3>
+                <span class="maint-badge maint-badge-safe">Seguro</span>
             </div>
         </div>
-        <div id="thumb-log" class="mb-3 bg-black rounded p-2 small font-monospace d-none"
-             style="max-height:150px; overflow-y:auto; border:1px solid #333"></div>
+        <p class="maint-card-desc">
+            <strong class="maint-amber"><?= (int) ($pending_thumbs ?? 0) ?></strong> foto(s) sem thumbnail (<?= THUMB_WIDTH ?>px). Novos uploads já geram automaticamente; gere aqui para as imagens existentes.
+        </p>
+        <div id="thumb-progress-wrap" class="maint-progress d-none">
+            <div class="maint-progress-info"><span>Progresso</span><span id="thumb-progress-label">0 / <?= (int) ($pending_thumbs ?? 0) ?></span></div>
+            <div class="maint-progress-track"><div id="thumb-progress-bar" class="maint-progress-bar" style="width:0%"></div></div>
+        </div>
+        <div class="maint-logwrap d-none" id="thumb-logwrap">
+            <div class="maint-log-toolbar"><span><i class="fa fa-terminal"></i> Log</span><button type="button" class="maint-copy" data-log="thumb-log"><i class="fa fa-copy"></i> Copiar</button></div>
+            <div id="thumb-log" class="maint-log"></div>
+        </div>
         <div id="thumb-banner" class="d-none"></div>
-        <button id="btn-thumb-start" class="btn btn-warning btn-sm" <?= ($pending_thumbs ?? 0) === 0 ? 'disabled' : '' ?>>
-            <i class="fa fa-play me-1"></i>Gerar Thumbnails
-        </button>
-    </div>
-</div>
+        <div class="maint-card-foot">
+            <button id="btn-thumb-start" class="md-btn md-btn-primary" <?= (int) ($pending_thumbs ?? 0) === 0 ? 'disabled' : '' ?>>
+                <i class="fa fa-play"></i>Gerar thumbnails
+            </button>
+        </div>
+    </article>
+
+    <article class="maint-card">
+        <div class="maint-card-head">
+            <span class="maint-card-ico"><i class="fa fa-bolt"></i></span>
+            <div class="maint-card-titlewrap">
+                <h3 class="maint-card-title">Cache de código (OPcache)</h3>
+                <span class="maint-badge maint-badge-safe">Seguro</span>
+            </div>
+        </div>
+        <p class="maint-card-desc">
+            O PHP guarda os arquivos <code>.php</code> em cache. Após enviar código atualizado por FTP, limpe o cache para que o código novo entre em vigor.
+        </p>
+        <div id="opcache-result" class="d-none"></div>
+        <div class="maint-card-foot">
+            <button id="btn-opcache" class="md-btn"><i class="fa fa-broom"></i>Limpar cache de código</button>
+        </div>
+    </article>
+</section>
+
+<!-- ════ DANGER ZONE ══════════════════════════════════════════════════════ -->
+<section class="maint-zone maint-danger">
+    <h2 class="maint-zone-title maint-zone-danger"><i class="fa fa-triangle-exclamation"></i>Zona de risco</h2>
+    <p class="maint-danger-note">As ações abaixo alteram a estrutura do banco de dados ou removem arquivos de forma <strong>irreversível</strong>. Marque a confirmação antes de executar.</p>
+
+    <?php if (empty($db_error) && $webp_support): ?>
+        <?php if ($pending === 0): ?>
+        <article class="maint-card">
+            <div class="maint-card-head">
+                <span class="maint-card-ico"><i class="fa fa-file-image"></i></span>
+                <div class="maint-card-titlewrap">
+                    <h3 class="maint-card-title">Migração para WebP</h3>
+                    <span class="maint-badge maint-badge-danger">Destrutivo</span>
+                </div>
+            </div>
+            <div class="maint-alert maint-alert-ok">
+                <i class="fa fa-circle-check"></i>
+                <span>Todas as fotos já estão no formato WebP. Nenhuma migração necessária.</span>
+            </div>
+        </article>
+        <?php else: ?>
+        <article class="maint-card">
+            <div class="maint-card-head">
+                <span class="maint-card-ico"><i class="fa fa-file-image"></i></span>
+                <div class="maint-card-titlewrap">
+                    <h3 class="maint-card-title">Migração para WebP</h3>
+                    <span class="maint-badge maint-badge-danger">Destrutivo</span>
+                </div>
+            </div>
+            <p class="maint-card-desc">
+                <strong class="maint-amber"><?= $pending ?></strong> foto(s) serão convertidas para WebP. <strong class="maint-red">Os arquivos originais são apagados</strong> após a conversão (irreversível). O processo roda em lotes de 5 para evitar timeout.
+            </p>
+            <div id="progress-wrap" class="maint-progress d-none">
+                <div class="maint-progress-info"><span>Progresso</span><span id="progress-label">0 / <?= $pending ?></span></div>
+                <div class="maint-progress-track"><div id="progress-bar" class="maint-progress-bar" style="width:0%"></div></div>
+            </div>
+            <div class="maint-logwrap d-none" id="log-wrap">
+                <div class="maint-log-toolbar"><span><i class="fa fa-terminal"></i> Log</span><button type="button" class="maint-copy" data-log="log"><i class="fa fa-copy"></i> Copiar</button></div>
+                <div id="log" class="maint-log"></div>
+            </div>
+            <div id="result-banner" class="d-none"></div>
+            <label class="maint-ack">
+                <input type="checkbox" id="webp-ack">
+                <span>Entendo que os arquivos originais serão apagados de forma irreversível.</span>
+            </label>
+            <div class="maint-card-foot">
+                <button id="btn-start" class="md-btn md-btn-primary" disabled><i class="fa fa-play"></i>Iniciar migração</button>
+                <button id="btn-stop" class="md-btn d-none"><i class="fa fa-stop"></i>Pausar</button>
+            </div>
+        </article>
+        <?php endif; ?>
+    <?php endif; ?>
+
+    <article class="maint-card">
+        <div class="maint-card-head">
+            <span class="maint-card-ico"><i class="fa fa-database"></i></span>
+            <div class="maint-card-titlewrap">
+                <h3 class="maint-card-title">Índices &amp; migrations do banco</h3>
+                <span class="maint-badge maint-badge-warn">Altera banco</span>
+            </div>
+        </div>
+        <p class="maint-card-desc">
+            Cria índices, adiciona colunas/tabelas e aplica migrations de schema. É idempotente (só aplica o que falta), mas inclui alterações estruturais no banco.
+        </p>
+        <div class="maint-logwrap d-none" id="idx-logwrap">
+            <div class="maint-log-toolbar"><span><i class="fa fa-terminal"></i> Log</span><button type="button" class="maint-copy" data-log="idx-log"><i class="fa fa-copy"></i> Copiar</button></div>
+            <div id="idx-log" class="maint-log"></div>
+        </div>
+        <label class="maint-ack">
+            <input type="checkbox" id="idx-ack">
+            <span>Entendo que esta ação altera a estrutura do banco de dados.</span>
+        </label>
+        <div class="maint-card-foot">
+            <button id="btn-idx" class="md-btn md-btn-primary" disabled><i class="fa fa-bolt"></i>Aplicar índices &amp; migrations</button>
+        </div>
+    </article>
+</section>
 
 <script>
 (function () {
-    const CSRF_TOKEN   = <?= json_encode(csrf_token()) ?>;
-    const TOTAL_THUMBS = <?= (int) ($pending_thumbs ?? 0) ?>;
-    const BATCH_SIZE   = 5;
+    const CSRF = <?= json_encode(csrf_token()) ?>;
 
-    let totalGen = 0;
-    let stopped  = false;
-
-    const btn    = document.getElementById('btn-thumb-start');
-    const bar    = document.getElementById('thumb-progress-bar');
-    const label  = document.getElementById('thumb-progress-label');
-    const wrap   = document.getElementById('thumb-progress-wrap');
-    const log    = document.getElementById('thumb-log');
-    const banner = document.getElementById('thumb-banner');
-
-    function appendLog(msg, cls) {
-        log.classList.remove('d-none');
+    function ts() {
+        return '[' + new Date().toLocaleTimeString('pt-BR') + '] ';
+    }
+    function logLine(logEl, wrapId, msg, type) {
+        if (wrapId) { const w = document.getElementById(wrapId); if (w) w.classList.remove('d-none'); }
         const line = document.createElement('div');
-        line.className = cls || 'text-secondary';
-        line.textContent = msg;
-        log.appendChild(line);
-        log.scrollTop = log.scrollHeight;
+        line.className = 'maint-log-line maint-log-' + (type || 'muted');
+        line.textContent = ts() + msg;
+        logEl.appendChild(line);
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+    function showBanner(el, ok, html) {
+        el.className = 'maint-alert ' + (ok ? 'maint-alert-ok' : 'maint-alert-error');
+        el.innerHTML = '<i class="fa ' + (ok ? 'fa-circle-check' : 'fa-circle-xmark') + '"></i><span>' + html + '</span>';
+        el.classList.remove('d-none');
     }
 
-    btn.addEventListener('click', async function () {
-        stopped = false;
-        btn.disabled = true;
-        wrap.classList.remove('d-none');
-        banner.classList.add('d-none');
+    // Copy-log buttons
+    document.querySelectorAll('.maint-copy').forEach(function (b) {
+        b.addEventListener('click', function () {
+            const el = document.getElementById(b.dataset.log);
+            if (!el || !el.innerText) return;
+            navigator.clipboard.writeText(el.innerText).then(function () {
+                const html = b.innerHTML;
+                b.innerHTML = '<i class="fa fa-check"></i> Copiado!';
+                setTimeout(function () { b.innerHTML = html; }, 1500);
+            });
+        });
+    });
 
-        let remaining = TOTAL_THUMBS - totalGen;
+    // Acknowledge checkboxes gate destructive buttons
+    function gate(ackId, btnId) {
+        const ack = document.getElementById(ackId);
+        const btn = document.getElementById(btnId);
+        if (!ack || !btn) return;
+        ack.addEventListener('change', function () { btn.disabled = !ack.checked; });
+    }
+    gate('webp-ack', 'btn-start');
+    gate('idx-ack', 'btn-idx');
 
-        while (!stopped && remaining > 0) {
-            try {
-                const resp = await fetch('', {
-                    method: 'POST',
-                    body: new URLSearchParams({ action: 'gen_thumbs', limit: BATCH_SIZE, csrf_token: CSRF_TOKEN }),
-                });
-                const data = await resp.json();
+    // ── WebP migration (destrutivo) ──────────────────────────────────
+    (function () {
+        const btnStart = document.getElementById('btn-start');
+        if (!btnStart) return; // não renderizado (sem pendências ou indisponível)
+        const btnStop  = document.getElementById('btn-stop');
+        const bar      = document.getElementById('progress-bar');
+        const label    = document.getElementById('progress-label');
+        const wrap     = document.getElementById('progress-wrap');
+        const log      = document.getElementById('log');
+        const result   = document.getElementById('result-banner');
+        const statPend = document.getElementById('stat-pending');
+        const statDone = document.getElementById('stat-done');
+        const TOTAL    = <?= (int) $pending ?>;
+        const GRAND    = <?= (int) $total ?>;
+        let converted = 0, stopped = false;
 
-                totalGen += data.generated;
-                remaining = data.remaining;
-
-                const done = TOTAL_THUMBS - remaining;
-                const pct  = TOTAL_THUMBS > 0 ? Math.round((done / TOTAL_THUMBS) * 100) : 100;
-                bar.style.width = pct + '%';
-                label.textContent = done + ' / ' + TOTAL_THUMBS;
-
-                if (data.generated > 0) {
-                    appendLog('✓ ' + data.generated + ' thumbnail(s) gerado(s)', 'text-success');
-                }
-                if (data.errors && data.errors.length) {
-                    data.errors.forEach(function (e) { appendLog('✗ ' + e, 'text-danger'); });
-                }
-
-                if (data.done) break;
-                await new Promise(function (r) { setTimeout(r, 300); });
-            } catch (err) {
-                appendLog('Erro: ' + err.message, 'text-danger');
-                break;
-            }
+        function progress(remaining) {
+            const done = TOTAL - remaining;
+            const pct = TOTAL > 0 ? Math.round((done / TOTAL) * 100) : 100;
+            bar.style.width = pct + '%';
+            label.textContent = done + ' / ' + TOTAL;
+            if (statPend) statPend.textContent = remaining;
+            if (statDone) statDone.textContent = GRAND - remaining;
         }
 
-        btn.disabled = false;
+        btnStart.addEventListener('click', async function () {
+            if (!confirm('Converter ' + TOTAL + ' foto(s) para WebP? Os arquivos originais serão apagados de forma irreversível.')) return;
+            stopped = false;
+            btnStart.classList.add('d-none');
+            btnStop.classList.remove('d-none');
+            wrap.classList.remove('d-none');
+            result.classList.add('d-none');
+            logLine(log, 'log-wrap', 'Iniciando migração…', 'muted');
 
-        if (remaining === 0) {
+            let remaining = TOTAL - converted;
+            while (!stopped && remaining > 0) {
+                try {
+                    const resp = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'batch', limit: 5, csrf_token: CSRF }) });
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    const data = await resp.json();
+                    converted += data.converted;
+                    remaining = data.remaining;
+                    if (data.converted > 0) logLine(log, 'log-wrap', '✓ ' + data.converted + ' foto(s) convertida(s)', 'ok');
+                    if (data.skipped > 0)   logLine(log, 'log-wrap', '⚠ ' + data.skipped + ' arquivo(s) ausente(s) no disco', 'warn');
+                    if (data.errors && data.errors.length) data.errors.forEach(function (e) { logLine(log, 'log-wrap', '✗ Falha: ' + e, 'err'); });
+                    progress(remaining);
+                    if (data.done) break;
+                    await new Promise(function (r) { setTimeout(r, 300); });
+                } catch (err) {
+                    logLine(log, 'log-wrap', 'Erro na requisição: ' + err.message, 'err');
+                    break;
+                }
+            }
+
+            btnStop.classList.add('d-none');
+            btnStart.classList.remove('d-none');
+            if (remaining === 0) {
+                btnStart.disabled = true;
+                logLine(log, 'log-wrap', '─── Migração concluída ───', 'bold');
+                showBanner(result, true, '<strong>Migração concluída!</strong> ' + converted + ' foto(s) convertida(s) para WebP.');
+            } else if (stopped) {
+                logLine(log, 'log-wrap', '─── Pausado. Clique em Iniciar para continuar. ───', 'warn');
+            }
+        });
+        btnStop.addEventListener('click', function () { stopped = true; });
+    })();
+
+    // ── Thumbnails (seguro) ──────────────────────────────────────────
+    (function () {
+        const btn = document.getElementById('btn-thumb-start');
+        if (!btn) return;
+        const bar    = document.getElementById('thumb-progress-bar');
+        const label  = document.getElementById('thumb-progress-label');
+        const wrap   = document.getElementById('thumb-progress-wrap');
+        const log    = document.getElementById('thumb-log');
+        const result = document.getElementById('thumb-banner');
+        const TOTAL  = <?= (int) ($pending_thumbs ?? 0) ?>;
+        let gen = 0, stopped = false;
+
+        btn.addEventListener('click', async function () {
+            stopped = false;
             btn.disabled = true;
-            banner.innerHTML =
-                '<div class="alert alert-success mt-2">' +
-                '<i class="fa fa-check-circle me-2"></i>' +
-                '<strong>Concluído!</strong> ' + totalGen + ' thumbnail(s) gerado(s).' +
-                '</div>';
-            banner.classList.remove('d-none');
-        }
-    });
-})();
-</script>
+            wrap.classList.remove('d-none');
+            result.classList.add('d-none');
+            logLine(log, 'thumb-logwrap', 'Gerando thumbnails…', 'muted');
 
-<!-- ─── DB INDEXES ─────────────────────────────────────────────────────────── -->
-<hr class="border-secondary mt-5">
-<h2 class="h5 mb-3"><i class="fa fa-database me-2 text-warning"></i>Índices do Banco de Dados</h2>
-<div class="card bg-dark border-secondary mb-4">
-    <div class="card-body">
-        <p class="text-secondary small mb-3">
-            Aplica índices que aceleram a listagem e filtragem de miniaturas.
-            Operação segura — usa <code>CREATE INDEX IF NOT EXISTS</code>.
-        </p>
-        <div id="idx-log" class="mb-3 bg-black rounded p-2 small font-monospace d-none"
-             style="max-height:150px; overflow-y:auto; border:1px solid #333"></div>
-        <button id="btn-idx" class="btn btn-outline-warning btn-sm">
-            <i class="fa fa-bolt me-1"></i>Aplicar Índices
-        </button>
-    </div>
-</div>
-
-<script>
-(function () {
-    const CSRF_TOKEN = <?= json_encode(csrf_token()) ?>;
-    const btnIdx     = document.getElementById('btn-idx');
-    const idxLog     = document.getElementById('idx-log');
-
-    function appendIdxLog(msg, cls) {
-        idxLog.classList.remove('d-none');
-        const line = document.createElement('div');
-        line.className = cls || 'text-secondary';
-        line.textContent = msg;
-        idxLog.appendChild(line);
-        idxLog.scrollTop = idxLog.scrollHeight;
-    }
-
-    btnIdx.addEventListener('click', async function () {
-        btnIdx.disabled = true;
-        btnIdx.textContent = 'Aplicando…';
-
-        try {
-            const resp = await fetch('', {
-                method: 'POST',
-                body: new URLSearchParams({ action: 'apply_indexes', csrf_token: CSRF_TOKEN }),
-            });
-            const data = await resp.json();
-
-            data.applied.forEach(function (n)  { appendIdxLog('✓ Criado: ' + n, 'text-success'); });
-            data.skipped.forEach(function (n)  { appendIdxLog('— Já existe: ' + n, 'text-secondary'); });
-            data.errors.forEach(function (e)   { appendIdxLog('✗ ' + e, 'text-danger'); });
-
-            if (!data.errors.length) {
-                appendIdxLog('─── Concluído sem erros ───', 'text-success fw-bold');
-                btnIdx.textContent = 'Índices aplicados';
-            } else {
-                btnIdx.disabled = false;
-                btnIdx.textContent = 'Aplicar Índices';
+            let remaining = TOTAL - gen;
+            while (!stopped && remaining > 0) {
+                try {
+                    const resp = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'gen_thumbs', limit: 5, csrf_token: CSRF }) });
+                    const data = await resp.json();
+                    gen += data.generated;
+                    remaining = data.remaining;
+                    const done = TOTAL - remaining;
+                    const pct = TOTAL > 0 ? Math.round((done / TOTAL) * 100) : 100;
+                    bar.style.width = pct + '%';
+                    label.textContent = done + ' / ' + TOTAL;
+                    if (data.generated > 0) logLine(log, 'thumb-logwrap', '✓ ' + data.generated + ' thumbnail(s) gerado(s)', 'ok');
+                    if (data.errors && data.errors.length) data.errors.forEach(function (e) { logLine(log, 'thumb-logwrap', '✗ ' + e, 'err'); });
+                    if (data.done) break;
+                    await new Promise(function (r) { setTimeout(r, 300); });
+                } catch (err) {
+                    logLine(log, 'thumb-logwrap', 'Erro: ' + err.message, 'err');
+                    break;
+                }
             }
-        } catch (err) {
-            appendIdxLog('Erro: ' + err.message, 'text-danger');
-            btnIdx.disabled = false;
-            btnIdx.textContent = 'Aplicar Índices';
-        }
-    });
-})();
-</script>
 
-<h2 class="h5 mb-3"><i class="fa fa-rotate me-2 text-warning"></i>Cache de Código (OPcache)</h2>
-<div class="card bg-dark border-secondary mb-4">
-    <div class="card-body">
-        <p class="text-secondary small mb-3">
-            Em hospedagem compartilhada, o PHP guarda os arquivos <code>.php</code> em cache (OPcache).
-            Após enviar arquivos atualizados por FTP, limpe o cache para garantir que o código novo entre em vigor.
-        </p>
-        <div id="opcache-result" class="d-none mb-3"></div>
-        <button id="btn-opcache" class="btn btn-outline-warning btn-sm">
-            <i class="fa fa-broom me-1"></i>Limpar Cache de Código
-        </button>
-    </div>
-</div>
-
-<script>
-(function () {
-    const CSRF_TOKEN = <?= json_encode(csrf_token()) ?>;
-    const btn    = document.getElementById('btn-opcache');
-    const result = document.getElementById('opcache-result');
-
-    function showResult(message, ok) {
-        result.className = 'alert ' + (ok ? 'alert-success' : 'alert-danger') + ' py-2 small';
-        result.textContent = message;
-    }
-
-    btn.addEventListener('click', async function () {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i>Limpando…';
-
-        try {
-            const resp = await fetch('', {
-                method: 'POST',
-                body: new URLSearchParams({ action: 'reset_opcache', csrf_token: CSRF_TOKEN }),
-            });
-            const data = await resp.json();
-            showResult(data.message, data.ok);
-        } catch (err) {
-            showResult('Erro: ' + err.message, false);
-        } finally {
             btn.disabled = false;
-            btn.innerHTML = '<i class="fa fa-broom me-1"></i>Limpar Cache de Código';
-        }
-    });
+            if (remaining === 0) {
+                btn.disabled = true;
+                showBanner(result, true, '<strong>Concluído!</strong> ' + gen + ' thumbnail(s) gerado(s).');
+            }
+        });
+    })();
+
+    // ── Índices & migrations (altera banco) ──────────────────────────
+    (function () {
+        const btn = document.getElementById('btn-idx');
+        if (!btn) return;
+        const log = document.getElementById('idx-log');
+
+        btn.addEventListener('click', async function () {
+            if (!confirm('Aplicar índices e migrations? Esta ação altera a estrutura do banco de dados.')) return;
+            btn.disabled = true;
+            const html = btn.innerHTML;
+            btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>Aplicando…';
+            logLine(log, 'idx-logwrap', 'Aplicando migrations…', 'muted');
+            try {
+                const resp = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'apply_indexes', csrf_token: CSRF }) });
+                const data = await resp.json();
+                (data.applied || []).forEach(function (n) { logLine(log, 'idx-logwrap', '✓ Aplicado: ' + n, 'ok'); });
+                (data.skipped || []).forEach(function (n) { logLine(log, 'idx-logwrap', '— Já existe: ' + n, 'muted'); });
+                (data.errors  || []).forEach(function (e) { logLine(log, 'idx-logwrap', '✗ ' + e, 'err'); });
+                if (!data.errors || !data.errors.length) {
+                    logLine(log, 'idx-logwrap', '─── Concluído sem erros ───', 'bold');
+                    btn.innerHTML = '<i class="fa fa-check"></i>Migrations aplicadas';
+                } else {
+                    btn.disabled = false;
+                    btn.innerHTML = html;
+                }
+            } catch (err) {
+                logLine(log, 'idx-logwrap', 'Erro: ' + err.message, 'err');
+                btn.disabled = false;
+                btn.innerHTML = html;
+            }
+        });
+    })();
+
+    // ── OPcache (seguro) ─────────────────────────────────────────────
+    (function () {
+        const btn = document.getElementById('btn-opcache');
+        if (!btn) return;
+        const result = document.getElementById('opcache-result');
+
+        btn.addEventListener('click', async function () {
+            btn.disabled = true;
+            const html = btn.innerHTML;
+            btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>Limpando…';
+            try {
+                const resp = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'reset_opcache', csrf_token: CSRF }) });
+                const data = await resp.json();
+                showBanner(result, !!data.ok, data.message);
+            } catch (err) {
+                showBanner(result, false, 'Erro: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = html;
+            }
+        });
+    })();
 })();
 </script>
 
