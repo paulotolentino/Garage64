@@ -7061,3 +7061,248 @@ body.admin-layout {
     justify-content: center;
   }
 }
+
+/* ══ Mural da Comunidade (feed-*) ══════════════════════════════════════ */
+.feed-hero {
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem 1.6rem;
+  margin-bottom: 1.25rem;
+  position: relative;
+  overflow: hidden;
+}
+.feed-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--amber-core);
+}
+.feed-hero-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--ink-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.feed-hero-title i {
+  color: var(--amber-core);
+}
+.feed-hero-sub {
+  margin: 0.35rem 0 0;
+  color: var(--ink-secondary);
+  font-size: 0.92rem;
+}
+.feed-scope-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-muted);
+  text-decoration: none;
+  transition: color 0.16s ease;
+}
+.feed-scope-link:hover {
+  color: var(--amber-core);
+}
+
+.feed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.feed-item {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  transition:
+    border-color 0.16s ease,
+    transform 0.12s ease;
+}
+.feed-item:hover {
+  border-color: var(--line-amber);
+}
+
+/* Avatar + badge de tipo */
+.feed-avatar {
+  position: relative;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  overflow: visible;
+  display: block;
+}
+.feed-avatar img {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-base);
+  display: block;
+}
+.feed-type {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.66rem;
+  color: #fff;
+  border: 2px solid var(--surface-raised);
+  background: var(--ink-muted);
+}
+.feed-type-new .feed-type {
+  background: var(--amber-core);
+  color: #1a1206;
+}
+.feed-type-comment .feed-type {
+  background: var(--state-sealed);
+}
+.feed-type-reply .feed-type {
+  background: var(--state-loose);
+  color: #07210f;
+}
+.feed-type-follow .feed-type {
+  background: var(--state-grail);
+}
+
+/* Conteúdo textual */
+.feed-content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.feed-line {
+  margin: 0;
+  color: var(--ink-secondary);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+.feed-name {
+  color: var(--ink-primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+.feed-name:hover {
+  color: var(--amber-core);
+}
+.feed-obj {
+  color: var(--amber-core);
+  font-weight: 700;
+  text-decoration: none;
+}
+.feed-obj:hover {
+  text-decoration: underline;
+}
+.feed-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
+  color: var(--ink-muted);
+  font-size: 0.76rem;
+}
+
+/* Miniatura à direita */
+.feed-thumb {
+  flex-shrink: 0;
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-base);
+  display: block;
+}
+.feed-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Carregar mais */
+.feed-load-more-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 1.4rem 0 0.5rem;
+}
+.feed-load-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.4rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-strong);
+  background: var(--surface-raised);
+  color: var(--ink-secondary);
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    border-color 0.16s ease,
+    color 0.16s ease,
+    background-color 0.16s ease;
+}
+.feed-load-more:hover {
+  border-color: var(--line-amber);
+  color: var(--amber-core);
+  background: var(--surface-inlay);
+}
+.feed-end {
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: 0.8rem;
+  margin: 1.4rem 0 0.5rem;
+}
+
+/* Estado vazio */
+.feed-empty {
+  text-align: center;
+  background: var(--surface-raised);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-lg);
+  padding: 2.5rem 1.5rem;
+  color: var(--ink-secondary);
+}
+.feed-empty-ico {
+  font-size: 2.2rem;
+  color: var(--ink-faint);
+  margin-bottom: 0.8rem;
+  display: block;
+}
+.feed-empty p {
+  margin: 0;
+  max-width: 44ch;
+  margin-inline: auto;
+}
+
+@media (max-width: 575.98px) {
+  .feed-item {
+    gap: 0.7rem;
+    padding: 0.75rem 0.8rem;
+  }
+  .feed-thumb {
+    width: 48px;
+    height: 48px;
+  }
+  .feed-avatar,
+  .feed-avatar img {
+    width: 42px;
+    height: 42px;
+  }
+}

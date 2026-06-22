@@ -797,10 +797,31 @@ function thumb_url(?string $file_path): string {
     return '/uploads/' . thumb_path($file_path);
 }
 
+/**
+ * Human-friendly relative time in pt-BR (e.g. "há 3 horas").
+ * Shared helper used by notifications and the community feed.
+ */
+function time_ago(string $datetime): string {
+    $ts = strtotime($datetime);
+    if ($ts === false) return '';
+    $diff = time() - $ts;
+    if ($diff < 0)    $diff = 0;
+    if ($diff < 60)   return 'agora mesmo';
+    $mins = (int) floor($diff / 60);
+    if ($mins < 60)   return 'há ' . $mins . ($mins === 1 ? ' minuto' : ' minutos');
+    $hours = (int) floor($diff / 3600);
+    if ($hours < 24)  return 'há ' . $hours . ($hours === 1 ? ' hora' : ' horas');
+    $days = (int) floor($diff / 86400);
+    if ($days < 7)    return 'há ' . $days . ($days === 1 ? ' dia' : ' dias');
+    if ($days < 30)   { $w = (int) floor($days / 7); return 'há ' . $w . ($w === 1 ? ' semana' : ' semanas'); }
+    if ($days < 365)  { $mo = (int) floor($days / 30); return 'há ' . $mo . ($mo === 1 ? ' mês' : ' meses'); }
+    $y = (int) floor($days / 365);
+    return 'há ' . $y . ($y === 1 ? ' ano' : ' anos');
+}
+
 // ─── Recent miniatures ───────────────────────────────────────────────────────
 
-function get_recent_miniatures(int $limit = 5): array {
-    $stmt = db()->prepare(
+function get_recent_miniatures(int $limit = 5): array {    $stmt = db()->prepare(
         'SELECT m.*, c.name AS category_name,
                 p.file_path AS primary_photo
          FROM miniatures m
@@ -813,7 +834,110 @@ function get_recent_miniatures(int $limit = 5): array {
     return $stmt->fetchAll();
 }
 
-// ─── Comments (social module — Phases 1-3) ───────────────────────────────────
+// ─── Community feed (social module — Phase 8, dynamic UNION ALL, no extra table) ─
+
+/**
+ * Public community activity feed.
+ *
+ * Built dynamically from existing tables (no feed_events table, no write hooks).
+ * Keyset pagination by created_at: pass the created_at of the last item as
+ * $before to fetch the next, older page. Each source is capped before the merge
+ * to keep filesorts tiny. Returns display-ready rows (no N+1).
+ *
+ * Event types: new_miniature, comment, reply, follow. (Likes intentionally
+ * excluded in V1 to keep the wall focused.)
+ *
+ * Audience:
+ *   $viewerUserId === null → global feed (everyone) — used for logged-out visitors.
+ *   $viewerUserId !== null → only activity from collectors the viewer follows
+ *                            (actor must be in user_follows.following_id). The
+ *                            viewer's own activity is NOT injected automatically.
+ *
+ * Safety: only public miniatures, only non-banned actors (and non-banned target
+ * on follows); no private columns are ever selected.
+ */
+function get_community_feed(int $limit = 20, ?string $before = null, ?int $viewerUserId = null): array {
+    $limit = max(1, min(50, $limit));
+    $cap   = $limit; // integer, safe to inline into LIMIT
+
+    $hasBefore = $before !== null && trim($before) !== '';
+    $cond_m = $hasBefore ? ' AND m.created_at < ?' : '';
+    $cond_c = $hasBefore ? ' AND c.created_at < ?' : '';
+    $cond_f = $hasBefore ? ' AND f.created_at < ?' : '';
+
+    // Restrict to followed collectors when a viewer is given. The actor of each
+    // event (miniature owner / commenter / follower) must be someone the viewer
+    // follows. Uses a positional placeholder per subquery.
+    $followsOnly = $viewerUserId !== null && $viewerUserId > 0;
+    $foll_m = $followsOnly ? ' AND m.user_id IN (SELECT following_id FROM user_follows WHERE follower_id = ?)' : '';
+    $foll_c = $followsOnly ? ' AND c.user_id IN (SELECT following_id FROM user_follows WHERE follower_id = ?)' : '';
+    $foll_f = $followsOnly ? ' AND f.follower_id IN (SELECT following_id FROM user_follows WHERE follower_id = ?)' : '';
+
+    $sql = "SELECT * FROM (
+        ( SELECT 'new_miniature' AS type, m.user_id AS actor_id, m.created_at AS created_at,
+                 m.id AS miniature_id, NULL AS comment_id, NULL AS target_user_id,
+                 a.display_name AS actor_display_name, a.username AS actor_username,
+                 a.slug AS actor_slug, a.avatar AS actor_avatar,
+                 m.name AS miniature_name, m.manufacturer AS miniature_manufacturer, p.file_path AS miniature_photo,
+                 NULL AS target_display_name, NULL AS target_username, NULL AS target_slug, NULL AS target_avatar
+          FROM miniatures m
+          JOIN admin_users a ON a.id = m.user_id AND a.is_banned = 0
+          LEFT JOIN miniature_photos p ON p.miniature_id = m.id AND p.is_primary = 1
+          WHERE m.is_public = 1{$cond_m}{$foll_m}
+          ORDER BY m.created_at DESC LIMIT {$cap} )
+        UNION ALL
+        ( SELECT 'comment', c.user_id, c.created_at, c.miniature_id, c.id, NULL,
+                 a.display_name, a.username, a.slug, a.avatar,
+                 m.name, m.manufacturer, p.file_path,
+                 NULL, NULL, NULL, NULL
+          FROM miniature_comments c
+          JOIN miniatures m ON m.id = c.miniature_id AND m.is_public = 1
+          JOIN admin_users a ON a.id = c.user_id AND a.is_banned = 0
+          LEFT JOIN miniature_photos p ON p.miniature_id = m.id AND p.is_primary = 1
+          WHERE c.parent_id IS NULL{$cond_c}{$foll_c}
+          ORDER BY c.created_at DESC LIMIT {$cap} )
+        UNION ALL
+        ( SELECT 'reply', c.user_id, c.created_at, c.miniature_id, c.id, NULL,
+                 a.display_name, a.username, a.slug, a.avatar,
+                 m.name, m.manufacturer, p.file_path,
+                 NULL, NULL, NULL, NULL
+          FROM miniature_comments c
+          JOIN miniatures m ON m.id = c.miniature_id AND m.is_public = 1
+          JOIN admin_users a ON a.id = c.user_id AND a.is_banned = 0
+          LEFT JOIN miniature_photos p ON p.miniature_id = m.id AND p.is_primary = 1
+          WHERE c.parent_id IS NOT NULL{$cond_c}{$foll_c}
+          ORDER BY c.created_at DESC LIMIT {$cap} )
+        UNION ALL
+        ( SELECT 'follow', f.follower_id, f.created_at, NULL, NULL, f.following_id,
+                 a.display_name, a.username, a.slug, a.avatar,
+                 NULL, NULL, NULL,
+                 t.display_name, t.username, t.slug, t.avatar
+          FROM user_follows f
+          JOIN admin_users a ON a.id = f.follower_id AND a.is_banned = 0
+          JOIN admin_users t ON t.id = f.following_id AND t.is_banned = 0
+          WHERE 1 = 1{$cond_f}{$foll_f}
+          ORDER BY f.created_at DESC LIMIT {$cap} )
+    ) feed
+    ORDER BY created_at DESC
+    LIMIT {$cap}";
+
+    $params = [];
+    // Placeholders are bound per subquery in textual order: [before?, viewer?]
+    // for each of the 4 subqueries (miniature, comment, reply, follow).
+    for ($i = 0; $i < 4; $i++) {
+        if ($hasBefore)   $params[] = $before;
+        if ($followsOnly) $params[] = $viewerUserId;
+    }
+
+    try {
+        $stmt = db()->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    } catch (\PDOException $e) {
+        return []; // graceful: never fatal a public page (e.g. legacy DB w/o avatar)
+    }
+}
+
 
 const COMMENT_MAX_LENGTH = 1000;
 

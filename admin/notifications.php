@@ -64,24 +64,8 @@ $filtered = array_values(array_filter($notifications, static function (array $n)
     return (string) $n['type'] === $filter;
 }));
 
-// ─── Local helper: relative "time ago" (pt-BR), scoped to this page ──────────
-$notif_time_ago = static function (string $datetime): string {
-    $ts = strtotime($datetime);
-    if ($ts === false) return '';
-    $diff = time() - $ts;
-    if ($diff < 0)    $diff = 0;
-    if ($diff < 60)   return 'agora mesmo';
-    $mins = (int) floor($diff / 60);
-    if ($mins < 60)   return 'há ' . $mins . ($mins === 1 ? ' minuto' : ' minutos');
-    $hours = (int) floor($diff / 3600);
-    if ($hours < 24)  return 'há ' . $hours . ($hours === 1 ? ' hora' : ' horas');
-    $days = (int) floor($diff / 86400);
-    if ($days < 7)    return 'há ' . $days . ($days === 1 ? ' dia' : ' dias');
-    if ($days < 30)   { $w = (int) floor($days / 7); return 'há ' . $w . ($w === 1 ? ' semana' : ' semanas'); }
-    if ($days < 365)  { $mo = (int) floor($days / 30); return 'há ' . $mo . ($mo === 1 ? ' mês' : ' meses'); }
-    $y = (int) floor($days / 365);
-    return 'há ' . $y . ($y === 1 ? ' ano' : ' anos');
-};
+// ─── Local helper: relative "time ago" — delegates to shared time_ago() ──────
+$notif_time_ago = static fn (string $datetime): string => time_ago($datetime);
 
 // ─── Group filtered notifications by time bucket ─────────────────────────────
 $groups = ['today' => [], 'week' => [], 'older' => []];

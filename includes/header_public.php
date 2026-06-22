@@ -64,6 +64,9 @@ $g64_initial = mb_strtoupper(mb_substr($g64_name !== '' ? $g64_name : ($g64_slug
             <ul class="g64-public-header__nav navbar-nav ms-auto mb-2 mb-lg-0">
                 <?php if ($g64_logged): ?>
                 <li class="nav-item">
+                    <a class="g64-public-header__link" href="/community"><i class="fa fa-bullhorn me-1"></i>Mural</a>
+                </li>
+                <li class="nav-item">
                     <a class="g64-public-header__link" href="/collections"><i class="fa fa-compass me-1"></i>Coleções</a>
                 </li>
                 <li class="nav-item">
@@ -76,6 +79,9 @@ $g64_initial = mb_strtoupper(mb_substr($g64_name !== '' ? $g64_name : ($g64_slug
                     <a class="g64-public-header__link" href="/admin/logout"><i class="fa fa-arrow-right-from-bracket me-1"></i>Sair</a>
                 </li>
                 <?php else: ?>
+                <li class="nav-item">
+                    <a class="g64-public-header__link" href="/community"><i class="fa fa-bullhorn me-1"></i>Mural</a>
+                </li>
                 <li class="nav-item">
                     <a class="g64-public-header__link" href="/collections"><i class="fa fa-compass me-1"></i>Coleções</a>
                 </li>
