@@ -130,9 +130,22 @@ if (!$primary_photo && !empty($photos)) {
 // OG meta tags
 $og_title       = $miniature['name'];
 $og_url         = rtrim(APP_URL, '/') . mini_url($miniature);
+
+// Nome do colecionador dono (para "Coleção de X" na descrição compartilhada).
+$mini_owner_name = '';
+try {
+    $ost = db()->prepare('SELECT display_name, slug FROM admin_users WHERE id = ? LIMIT 1');
+    $ost->execute([(int) $miniature['user_id']]);
+    if ($orow = $ost->fetch()) { $mini_owner_name = $orow['display_name'] ?: $orow['slug']; }
+} catch (\Throwable $e) { /* opcional */ }
+
 $og_description = $miniature['public_description']
     ? mb_strimwidth(strip_tags($miniature['public_description']), 0, 160, '…')
-    : $miniature['manufacturer'] . ($miniature['scale'] ? ' · ' . $miniature['scale'] : '') . ($miniature['year'] ? ' · ' . $miniature['year'] : '');
+    : trim(
+        $miniature['manufacturer']
+        . ($miniature['scale'] ? ' • Escala ' . $miniature['scale'] : '')
+        . ($mini_owner_name !== '' ? ' • Coleção de ' . $mini_owner_name : '')
+      );
 $og_image = $primary_photo ? rtrim(APP_URL, '/') . photo_url($primary_photo['file_path']) : null;
 
 require_once __DIR__ . '/includes/header_public.php';

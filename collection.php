@@ -119,6 +119,15 @@ $panel_qs = [];
 if ($open_filters) $panel_qs['filters'] = 1;
 $clear_url = $base_url . ($panel_qs ? '?' . http_build_query($panel_qs) : '');
 
+// Metadados sociais (Open Graph / Twitter Cards) da garagem pública.
+// Imagem: 1) avatar do colecionador  2) imagem padrão (fallback no header).
+$og_title       = $display_name;
+$og_description = number_format($collection_total) . ' miniatura' . ($collection_total !== 1 ? 's' : '')
+                . ' • ' . number_format($followers_count) . ' seguidor' . ($followers_count !== 1 ? 'es' : '')
+                . ' • Coleção pública de miniaturas diecast';
+$og_url         = rtrim(APP_URL, '/') . '/u/' . rawurlencode($slug);
+$og_image       = $owner_avatar ? avatar_url($owner_avatar) : null;
+
 require_once __DIR__ . '/includes/header_public.php';
 ?>
 

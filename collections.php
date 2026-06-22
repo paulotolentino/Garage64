@@ -128,6 +128,12 @@ if ($viewer_id > 0 && $ids) {
 }
 
 $page_title = 'Coleções';
+
+// Metadados sociais (Open Graph / Twitter Cards).
+$og_title       = 'Explore Garagens';
+$og_description = 'Descubra colecionadores e miniaturas da comunidade.';
+$og_url         = rtrim(APP_URL, '/') . '/collections';
+
 require_once __DIR__ . '/includes/header_public.php';
 
 // Card de colecionador (closure reutilizada nos dois grids)

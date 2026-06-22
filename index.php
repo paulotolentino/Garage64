@@ -40,6 +40,12 @@ $lp_showcase_ids = array_map(fn($m) => (int) $m['id'], array_slice($lp_showcase,
 $lp_recent_rest = array_values(array_filter($lp_recent, fn($m) => !in_array((int) $m['id'], $lp_showcase_ids, true)));
 
 $body_class = 'lp-page';
+
+// Metadados sociais (Open Graph / Twitter Cards) da landing.
+$og_title       = 'Sua garagem de miniaturas na internet';
+$og_description = 'Catalogue, organize e compartilhe sua coleção de miniaturas com outros colecionadores.';
+$og_url         = rtrim(APP_URL, '/') . '/';
+
 require_once __DIR__ . '/includes/header_public.php';
 ?>
 

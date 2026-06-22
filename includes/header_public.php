@@ -7,19 +7,38 @@
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <title><?= e($page_title ?? APP_NAME) ?> — <?= h(APP_NAME) ?></title>
-    <?php if (!empty($og_title)): ?>
-    <meta property="og:site_name" content="<?= h(APP_NAME) ?>">
-    <meta property="og:title"       content="<?= e($og_title) ?> — <?= h(APP_NAME) ?>">
-    <meta property="og:type"        content="website">
-    <meta property="og:url"         content="<?= e($og_url ?? APP_URL) ?>">
+    <?php
+    // ── Metadados sociais (Open Graph + Twitter Cards + canonical) ───────────
+    // Reaproveita as variáveis $og_* definidas pelas páginas públicas.
+    $og_meta_title = !empty($og_title) ? ($og_title . ' — ' . APP_NAME) : APP_NAME;
+    $og_meta_img   = !empty($og_image)
+        ? $og_image
+        : ((defined('OG_DEFAULT_IMAGE') && OG_DEFAULT_IMAGE !== '') ? OG_DEFAULT_IMAGE : '');
+    $og_meta_url   = !empty($og_url) ? $og_url : '';
+    ?>
+    <meta property="og:site_name"   content="<?= h(APP_NAME) ?>">
+    <meta property="og:title"       content="<?= e($og_meta_title) ?>">
+    <meta property="og:type"        content="<?= e($og_type ?? 'website') ?>">
+    <?php if ($og_meta_url !== ''): ?>
+    <meta property="og:url"         content="<?= e($og_meta_url) ?>">
+    <?php endif; ?>
     <?php if (!empty($og_description)): ?>
     <meta property="og:description" content="<?= e($og_description) ?>">
     <meta name="description"        content="<?= e($og_description) ?>">
     <?php endif; ?>
-    <?php if (!empty($og_image)): ?>
-    <meta property="og:image"       content="<?= e($og_image) ?>">
-    <meta property="og:image:width" content="800">
+    <?php if ($og_meta_img !== ''): ?>
+    <meta property="og:image"       content="<?= e($og_meta_img) ?>">
     <?php endif; ?>
+    <meta name="twitter:card"        content="<?= $og_meta_img !== '' ? 'summary_large_image' : 'summary' ?>">
+    <meta name="twitter:title"       content="<?= e($og_meta_title) ?>">
+    <?php if (!empty($og_description)): ?>
+    <meta name="twitter:description" content="<?= e($og_description) ?>">
+    <?php endif; ?>
+    <?php if ($og_meta_img !== ''): ?>
+    <meta name="twitter:image"       content="<?= e($og_meta_img) ?>">
+    <?php endif; ?>
+    <?php if ($og_meta_url !== ''): ?>
+    <link rel="canonical" href="<?= e($og_meta_url) ?>">
     <?php endif; ?>
     <link rel="icon" type="image/svg+xml" href="/assets/img/favicon-cart.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">

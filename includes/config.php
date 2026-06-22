@@ -60,3 +60,15 @@ if (!defined('THUMB_WIDTH')) {
 if (!defined('PER_PAGE')) {
     define('PER_PAGE', 10); // items per page in the public listing
 }
+
+// Default social sharing image (Open Graph / Twitter Cards).
+// Empty by default → no site-wide fallback image is emitted. To enable rich
+// previews on pages without their own image (landing, collections, community),
+// drop a 1200×630 raster (PNG/JPG) into assets/img/ and point this to its
+// absolute URL, e.g.:
+//   define('OG_DEFAULT_IMAGE', APP_URL . '/assets/img/og-default.png');
+// (best set in config.local.php). SVG is intentionally avoided here because
+// most social scrapers (Facebook, X/Twitter, LinkedIn) reject SVG previews.
+if (!defined('OG_DEFAULT_IMAGE')) {
+    define('OG_DEFAULT_IMAGE', '');
+}
