@@ -23,7 +23,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $result = register_user($username, $email, $password, $display_name);
         if ($result === true) {
-            $success = true;
+            // Auto-login: cria a sessão imediatamente após o cadastro,
+            // reaproveitando o mesmo fluxo seguro do login tradicional.
+            login($username, $password);
+            redirect('/admin/');
         } else {
             $error = $result;
         }

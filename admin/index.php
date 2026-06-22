@@ -21,6 +21,51 @@ $g64_uid  = current_user_id();
 $g64_name = current_user_name();
 $g64_slug = current_user_slug();
 
+// ── Garagem vazia → onboarding de boas-vindas ────────────────────────────────
+// Quando o colecionador ainda não tem nenhuma miniatura, evitamos um painel
+// cheio de métricas zeradas e mostramos um estado acolhedor de primeiro uso.
+if ((int) $stats['total'] === 0) {
+    require_once __DIR__ . '/../includes/header_admin.php';
+    ?>
+    <section class="dash-welcome">
+        <span class="dash-welcome-badge"><i class="fa fa-warehouse"></i></span>
+        <div class="lp-eyebrow">Bem-vindo ao <?= h(APP_NAME) ?></div>
+        <h1 class="dash-welcome-title">Olá, <?= e($g64_name) ?>. Sua garagem está pronta.</h1>
+        <p class="dash-welcome-lead">
+            Sua garagem ainda está vazia. Vamos estacionar a primeira miniatura?
+            É rápido — depois ela ganha uma página pública só dela.
+        </p>
+        <div class="dash-welcome-actions">
+            <a href="/admin/miniatures?action=add" class="md-btn md-btn-primary dash-welcome-cta">
+                <i class="fa fa-plus"></i>Adicionar primeira miniatura
+            </a>
+            <a href="/community" class="md-btn">
+                <i class="fa fa-comments"></i>Ver mural da comunidade
+            </a>
+            <a href="/collections" class="md-btn">
+                <i class="fa fa-users"></i>Explorar colecionadores
+            </a>
+        </div>
+        <ul class="dash-welcome-steps">
+            <li class="dash-welcome-step">
+                <span class="dash-welcome-step-ico"><i class="fa fa-camera"></i></span>
+                <span class="dash-welcome-step-text"><strong>Cadastre uma peça</strong>Foto, fabricante e escala bastam para começar.</span>
+            </li>
+            <li class="dash-welcome-step">
+                <span class="dash-welcome-step-ico"><i class="fa fa-share-nodes"></i></span>
+                <span class="dash-welcome-step-text"><strong>Veja sua garagem ganhar vida</strong>Cada miniatura vira uma vitrine pública.</span>
+            </li>
+            <li class="dash-welcome-step">
+                <span class="dash-welcome-step-ico"><i class="fa fa-users"></i></span>
+                <span class="dash-welcome-step-text"><strong>Conecte-se</strong>Compartilhe seu endereço e encontre outros colecionadores.</span>
+            </li>
+        </ul>
+    </section>
+    <?php
+    require_once __DIR__ . '/../includes/footer_admin.php';
+    exit;
+}
+
 // Identidade — avatar e data de entrada (best-effort)
 $g64_avatar = null;
 $g64_since  = null;

@@ -157,6 +157,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $miniature_id = $id;
         flash('Miniatura atualizada com sucesso.');
     } else {
+        // Detecta se esta é a PRIMEIRA miniatura do colecionador (antes de inserir),
+        // para entregar o "momento mágico" após o cadastro inicial.
+        $cnt = db()->prepare('SELECT COUNT(*) FROM miniatures WHERE user_id = ?');
+        $cnt->execute([current_user_id()]);
+        $is_first_miniature = ((int) $cnt->fetchColumn() === 0);
+
         // Insert
         $cols = implode(', ', array_map(fn($k) => "`$k`", array_keys($data)));
         $phs  = implode(', ', array_map(fn($k) => ":$k", array_keys($data)));
@@ -216,6 +222,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Delete photo
     if (!empty($_POST['delete_photo_id'])) {
         delete_photo((int) $_POST['delete_photo_id'], $miniature_id);
+    }
+
+    // Momento mágico: ao cadastrar a PRIMEIRA miniatura, o colecionador é levado
+    // para o resultado público/bonito — não para a tabela administrativa.
+    if (!empty($is_first_miniature)) {
+        session_start_once();
+        unset($_SESSION['stats_cache']); // garante que o dashboard saia do estado vazio
+        if ((int) $data['is_public'] === 1) {
+            // Página pública da miniatura recém-criada.
+            redirect(mini_url(['id' => $miniature_id, 'name' => $data['name']]));
+        }
+        // Se a peça nasceu privada, mostramos a garagem pública do colecionador.
+        redirect('/u/' . current_user_slug());
     }
 
     $return_page = max(1, (int) ($_POST['return_page'] ?? 1));
