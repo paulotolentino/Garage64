@@ -47,10 +47,11 @@ $type_meta = [
     'comment' => ['icon' => 'fa-comment', 'label' => 'comentou na sua miniatura', 'mod' => 'comment'],
     'reply'   => ['icon' => 'fa-reply',   'label' => 'respondeu seu comentário',  'mod' => 'reply'],
     'mention' => ['icon' => 'fa-at',      'label' => 'mencionou você',            'mod' => 'mention'],
+    'like'    => ['icon' => 'fa-heart',   'label' => 'curtiu sua miniatura',      'mod' => 'like'],
 ];
 
 // ─── Filter (query param, no JS required) ────────────────────────────────────
-$valid_filters = ['all', 'unread', 'comment', 'reply', 'mention'];
+$valid_filters = ['all', 'unread', 'comment', 'reply', 'mention', 'like'];
 $filter = (string) ($_GET['filter'] ?? 'all');
 if (!in_array($filter, $valid_filters, true)) {
     $filter = 'all';
@@ -100,6 +101,7 @@ $filter_tabs = [
     'comment' => ['label' => 'Comentários','icon' => 'fa-comment'],
     'reply'   => ['label' => 'Respostas', 'icon' => 'fa-reply'],
     'mention' => ['label' => 'Menções',   'icon' => 'fa-at'],
+    'like'    => ['label' => 'Curtidas',  'icon' => 'fa-heart'],
 ];
 
 require_once __DIR__ . '/../includes/header_admin.php';

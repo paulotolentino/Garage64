@@ -207,15 +207,31 @@ function get_miniatures(array $filters = []): array {
     return [];
 }
 
-function get_miniature(int $id): ?array {
+function get_miniature(int $id, ?int $viewer_id = null): ?array {
     $stmt = db()->prepare(
-        'SELECT m.*, c.name AS category_name
+        'SELECT m.*, c.name AS category_name,
+                (SELECT COUNT(*) FROM miniature_likes WHERE miniature_id = m.id) AS likes_count,
+                EXISTS(SELECT 1 FROM miniature_likes WHERE miniature_id = m.id AND user_id = ?) AS user_liked
          FROM miniatures m
          LEFT JOIN categories c ON m.category_id = c.id
          WHERE m.id = ?'
     );
-    $stmt->execute([$id]);
+    $stmt->execute([$viewer_id ?? 0, $id]);
     return $stmt->fetch() ?: null;
+}
+
+/** Adds a like (idempotent — UNIQUE constraint prevents duplicates). */
+function like_miniature(int $miniature_id, int $user_id): void {
+    db()->prepare(
+        'INSERT IGNORE INTO miniature_likes (miniature_id, user_id) VALUES (?, ?)'
+    )->execute([$miniature_id, $user_id]);
+}
+
+/** Removes a like (no-op if it doesn't exist). */
+function unlike_miniature(int $miniature_id, int $user_id): void {
+    db()->prepare(
+        'DELETE FROM miniature_likes WHERE miniature_id = ? AND user_id = ?'
+    )->execute([$miniature_id, $user_id]);
 }
 
 function get_miniature_photos(int $miniature_id): array {
@@ -1028,7 +1044,7 @@ function create_notification(
 ): bool {
     if ($user_id <= 0 || $actor_user_id <= 0) return false;
     if ($user_id === $actor_user_id) return false; // no self-notification
-    if (!in_array($type, ['comment', 'reply', 'mention'], true)) return false;
+    if (!in_array($type, ['comment', 'reply', 'mention', 'like'], true)) return false;
     try {
         // Avoid duplicate notifications of the same type for the same comment.
         if ($comment_id !== null) {
@@ -1036,6 +1052,14 @@ function create_notification(
                 'SELECT 1 FROM notifications WHERE user_id = ? AND type = ? AND comment_id = ? LIMIT 1'
             );
             $chk->execute([$user_id, $type, $comment_id]);
+            if ($chk->fetchColumn()) return false;
+        } elseif ($type === 'like') {
+            // Likes carry no comment_id: dedupe by recipient + actor + miniature,
+            // so unlike→like cycles never create a second notification.
+            $chk = db()->prepare(
+                'SELECT 1 FROM notifications WHERE user_id = ? AND actor_user_id = ? AND type = ? AND miniature_id = ? LIMIT 1'
+            );
+            $chk->execute([$user_id, $actor_user_id, $type, $miniature_id]);
             if ($chk->fetchColumn()) return false;
         }
         $stmt = db()->prepare(

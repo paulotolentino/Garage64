@@ -8,7 +8,7 @@ if (!$id) {
     redirect('/');
 }
 
-$miniature = get_miniature($id);
+$miniature = get_miniature($id, current_user_id() ?: null);
 if (!$miniature || !$miniature['is_public']) {
     http_response_code(404);
     $page_title = 'Não encontrada';
@@ -54,6 +54,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['comment_action'])) {
         delete_miniature_comment((int) ($_POST['comment_id'] ?? 0), current_user_id());
     }
     header('Location: ' . mini_url($miniature) . '#comments');
+    exit;
+}
+
+// ─── Curtidas (POST) ──────────────────────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array($_POST['action'], ['like', 'unlike'], true)) {
+    // Usuário deslogado é direcionado ao login ao tentar curtir.
+    if (!is_logged_in()) {
+        header('Location: /admin/login');
+        exit;
+    }
+    verify_csrf();
+    if ($_POST['action'] === 'like') {
+        like_miniature($id, current_user_id());
+        // Best-effort: notify the owner (skips self-like and duplicates internally).
+        try {
+            create_notification(
+                (int) $miniature['user_id'], current_user_id(), 'like',
+                $id, null, mini_url($miniature)
+            );
+        } catch (Throwable $e) { /* never block the like */ }
+    } else {
+        unlike_miniature($id, current_user_id());
+    }
+    header('Location: ' . mini_url($miniature) . '#rating');
     exit;
 }
 
@@ -255,6 +279,35 @@ require_once __DIR__ . '/includes/header_public.php';
 <!-- ── Avaliação da comunidade ──────────────────────────── -->
 <section class="md-section" id="rating">
     <h2 class="md-section-title">Avaliação da comunidade</h2>
+
+    <?php
+    $likes_count = (int) ($miniature['likes_count'] ?? 0);
+    $user_liked  = !empty($miniature['user_liked']);
+    ?>
+    <div class="md-like-wrapper">
+        <?php if (is_logged_in()): ?>
+            <form method="post" action="<?= e(mini_url($miniature)) ?>#rating" class="md-like-form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="<?= $user_liked ? 'unlike' : 'like' ?>">
+                <button type="submit" class="md-like-btn <?= $user_liked ? 'md-like-active' : '' ?>"
+                        aria-pressed="<?= $user_liked ? 'true' : 'false' ?>"
+                        title="<?= $user_liked ? 'Remover curtida' : 'Curtir esta peça' ?>">
+                    <i class="fa fa-heart"></i>
+                    <span class="md-like-label"><?= $user_liked ? 'Curtido' : 'Curtir' ?></span>
+                </button>
+            </form>
+        <?php else: ?>
+            <a href="/admin/login" class="md-like-btn md-like-cta" title="Entre para curtir esta peça">
+                <i class="fa fa-heart"></i>
+                <span class="md-like-label">Curtir</span>
+            </a>
+        <?php endif; ?>
+        <span class="md-like-count">
+            <strong><?= number_format($likes_count) ?></strong>
+            curtida<?= $likes_count !== 1 ? 's' : '' ?>
+        </span>
+    </div>
+
     <div class="md-rating">
         <?php if ($public_rating['count'] > 0): $avg = $public_rating['avg']; ?>
             <div class="md-rating-avg">

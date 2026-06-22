@@ -169,7 +169,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             user_id INT UNSIGNED NOT NULL,
             actor_user_id INT UNSIGNED NOT NULL,
-            type ENUM('comment','reply','mention') NOT NULL,
+            type ENUM('comment','reply','mention','like') NOT NULL,
             miniature_id INT UNSIGNED NOT NULL,
             comment_id INT UNSIGNED NULL,
             target_url VARCHAR(255) NOT NULL,
@@ -182,6 +182,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
             FOREIGN KEY (actor_user_id) REFERENCES admin_users(id) ON DELETE CASCADE,
             FOREIGN KEY (miniature_id) REFERENCES miniatures(id) ON DELETE CASCADE,
             FOREIGN KEY (comment_id) REFERENCES miniature_comments(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'miniature_likes' => "CREATE TABLE miniature_likes (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            miniature_id INT UNSIGNED NOT NULL,
+            user_id INT UNSIGNED NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_mini_user (miniature_id, user_id),
+            KEY idx_likes_miniature (miniature_id),
+            KEY idx_likes_user (user_id),
+            FOREIGN KEY (miniature_id) REFERENCES miniatures(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     ];
     $check_table = db()->prepare(
@@ -221,6 +232,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
         } catch (Throwable $e) {
             $errors[] = 'enum:' . $key . ': ' . $e->getMessage();
         }
+    }
+
+    // ENUM expansion for notifications.type — add 'like' to existing installs.
+    try {
+        $chk_notif_type = db()->prepare(
+            "SELECT COLUMN_TYPE FROM information_schema.columns
+             WHERE table_schema = DATABASE() AND table_name = 'notifications' AND column_name = 'type'"
+        );
+        $chk_notif_type->execute();
+        $notif_type = $chk_notif_type->fetchColumn();
+        if (!$notif_type) {
+            $skipped[] = 'enum:notifications.type (table missing)';
+        } elseif (str_contains((string) $notif_type, "'like'")) {
+            $skipped[] = 'enum:notifications.type';
+        } else {
+            db()->exec(
+                "ALTER TABLE notifications MODIFY COLUMN type ENUM('comment','reply','mention','like') NOT NULL"
+            );
+            $applied[] = 'enum:notifications.type';
+        }
+    } catch (Throwable $e) {
+        $errors[] = 'enum:notifications.type: ' . $e->getMessage();
     }
 
     $check = db()->prepare(
