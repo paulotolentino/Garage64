@@ -3770,11 +3770,44 @@ body.admin-layout {
 }
 .collections-card-foot {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
   gap: 0.6rem;
   margin-top: auto;
   padding-top: 0.4rem;
+}
+.collections-card-stats {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+}
+.collections-card-stat {
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+}
+.collections-card-stat strong {
+  color: var(--amber-core);
+  font-size: 1rem;
+  font-weight: 800;
+}
+.collections-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.collections-card-actions .follow-form {
+  margin: 0;
+}
+/* Nos cards de descoberta, o botão "Seguindo" não troca de texto no hover:
+   texto fixo "Deixar de seguir" mantém a largura estável e elimina o flicker. */
+.collections-card-actions .follow-btn.is-following .follow-state-default {
+  display: none;
+}
+.collections-card-actions .follow-btn.is-following .follow-state-hover {
+  display: inline-flex;
 }
 .collections-card-count {
   font-size: 0.82rem;

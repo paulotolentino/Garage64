@@ -6,15 +6,46 @@ require_once __DIR__ . '/includes/functions.php';
 // ── Descoberta de garagens — busca + ordenação (via GET) ────────────────────
 $search = trim((string) ($_GET['search'] ?? ''));
 $sort   = (string) ($_GET['sort'] ?? 'featured');
-if (!in_array($sort, ['featured', 'minis', 'recent', 'name'], true)) {
+if (!in_array($sort, ['featured', 'minis', 'recent', 'followers', 'name'], true)) {
     $sort = 'featured';
 }
 
+// URL atual preservando busca/ordenação (usada pelos forms de follow).
+$return_qs  = http_build_query(array_filter(['search' => $search, 'sort' => $sort], static fn($v) => $v !== '' && $v !== 'featured'));
+$return_url = '/collections' . ($return_qs ? '?' . $return_qs : '');
+
+// ── Seguir / Deixar de seguir (POST local — espelha follows.php) ────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array($_POST['action'], ['follow', 'unfollow'], true)) {
+    if (!is_logged_in()) {
+        header('Location: /admin/login');
+        exit;
+    }
+    verify_csrf();
+    $me     = current_user_id();
+    $target = (int) ($_POST['target_id'] ?? 0);
+    if ($target > 0 && $me !== $target) { // nunca seguir a si mesmo
+        if ($_POST['action'] === 'follow') {
+            follow_user($me, $target);
+            try {
+                create_notification(
+                    $target, $me, 'follow',
+                    null, null, '/u/' . current_user_slug(), $target
+                );
+            } catch (Throwable $e) { /* nunca bloqueia o follow */ }
+        } else {
+            unfollow_user($me, $target);
+        }
+    }
+    header('Location: ' . $return_url);
+    exit;
+}
+
 $order_by = match ($sort) {
-    'minis'  => 'mini_count DESC, display_name ASC',
-    'recent' => 'u.created_at DESC, mini_count DESC',
-    'name'   => 'display_name ASC',
-    default  => 'is_featured DESC, mini_count DESC, display_name ASC',
+    'minis'     => 'mini_count DESC, display_name ASC',
+    'recent'    => 'u.created_at DESC, mini_count DESC',
+    'followers' => 'followers_count DESC, mini_count DESC, display_name ASC',
+    'name'      => 'display_name ASC',
+    default     => 'is_featured DESC, mini_count DESC, display_name ASC',
 };
 
 $where  = ['u.is_banned = 0', 'm.is_public = 1'];
@@ -28,9 +59,13 @@ if ($search !== '') {
 }
 $where_sql = implode(' AND ', $where);
 
+// Subselects de relacionamento social (não conflitam com o GROUP BY u.id).
+$follows_cols = '(SELECT COUNT(*) FROM user_follows fw WHERE fw.following_id = u.id) AS followers_count,
+                 (SELECT COUNT(*) FROM user_follows fw WHERE fw.follower_id = u.id) AS following_count';
+
 // Query principal (best-effort: is_featured pode não existir em bancos antigos)
-$select_main = 'u.id, u.slug, u.display_name, u.bio, u.avatar, u.is_featured, u.created_at, COUNT(m.id) AS mini_count';
-$select_fb   = 'u.id, u.slug, u.display_name, u.bio, u.avatar, 0 AS is_featured, u.created_at, COUNT(m.id) AS mini_count';
+$select_main = "u.id, u.slug, u.display_name, u.bio, u.avatar, u.is_featured, u.created_at, COUNT(m.id) AS mini_count, $follows_cols";
+$select_fb   = "u.id, u.slug, u.display_name, u.bio, u.avatar, 0 AS is_featured, u.created_at, COUNT(m.id) AS mini_count, $follows_cols";
 try {
     $stmt = db()->prepare(
         "SELECT $select_main
@@ -82,15 +117,29 @@ $featured      = $show_featured ? array_values(array_filter($collections, fn($c)
 $others        = $show_featured ? array_values(array_filter($collections, fn($c) => (int) $c['is_featured'] !== 1)) : $collections;
 $others_count  = count($others);
 
+// Quais dos listados o visitante já segue (uma única query — evita N+1).
+$viewer_id        = is_logged_in() ? current_user_id() : 0;
+$viewer_following = [];
+if ($viewer_id > 0 && $ids) {
+    $vph = implode(',', array_fill(0, count($ids), '?'));
+    $vst = db()->prepare("SELECT following_id FROM user_follows WHERE follower_id = ? AND following_id IN ($vph)");
+    $vst->execute(array_merge([$viewer_id], $ids));
+    $viewer_following = array_map('intval', array_column($vst->fetchAll(), 'following_id'));
+}
+
 $page_title = 'Coleções';
 require_once __DIR__ . '/includes/header_public.php';
 
 // Card de colecionador (closure reutilizada nos dois grids)
-$render_card = function (array $col) use ($brand_map): void {
-    $name   = $col['display_name'] ?: $col['slug'];
-    $isFeat = (int) ($col['is_featured'] ?? 0) === 1;
-    $count  = (int) $col['mini_count'];
-    $brands = $brand_map[(int) $col['id']] ?? [];
+$render_card = function (array $col) use ($brand_map, $viewer_id, $viewer_following, $return_url): void {
+    $name    = $col['display_name'] ?: $col['slug'];
+    $isFeat  = (int) ($col['is_featured'] ?? 0) === 1;
+    $count   = (int) $col['mini_count'];
+    $fcount  = (int) ($col['followers_count'] ?? 0);
+    $brands  = $brand_map[(int) $col['id']] ?? [];
+    $colId   = (int) $col['id'];
+    $isSelf  = $viewer_id === $colId;
+    $iFollow = in_array($colId, $viewer_following, true);
 ?>
 <article class="collections-card<?= $isFeat ? ' is-featured' : '' ?>">
     <?php if ($isFeat): ?><span class="collections-badge"><i class="fa fa-star"></i>Destaque</span><?php endif; ?>
@@ -116,8 +165,36 @@ $render_card = function (array $col) use ($brand_map): void {
         </div>
     <?php endif; ?>
     <div class="collections-card-foot">
-        <span class="collections-card-count"><strong><?= number_format($count) ?></strong> peça<?= $count !== 1 ? 's' : '' ?></span>
-        <a href="/u/<?= e($col['slug']) ?>" class="md-btn md-btn-primary collections-card-btn">Ver garagem <i class="fa fa-arrow-right"></i></a>
+        <div class="collections-card-stats">
+            <span class="collections-card-stat"><strong><?= number_format($count) ?></strong> peça<?= $count !== 1 ? 's' : '' ?></span>
+            <span class="collections-card-stat"><strong><?= number_format($fcount) ?></strong> <?= $fcount === 1 ? 'seguidor' : 'seguidores' ?></span>
+        </div>
+        <div class="collections-card-actions">
+            <?php if (!$isSelf): ?>
+                <?php if ($viewer_id > 0): ?>
+                    <form method="post" action="<?= e($return_url) ?>" class="follow-form">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="target_id" value="<?= $colId ?>">
+                        <input type="hidden" name="action" value="<?= $iFollow ? 'unfollow' : 'follow' ?>">
+                        <?php if ($iFollow): ?>
+                            <button type="submit" class="follow-btn is-following" title="Deixar de seguir <?= e($name) ?>">
+                                <span class="follow-state follow-state-default"><i class="fa fa-user-check"></i> Seguindo</span>
+                                <span class="follow-state follow-state-hover"><i class="fa fa-user-xmark"></i> Deixar de seguir</span>
+                            </button>
+                        <?php else: ?>
+                            <button type="submit" class="follow-btn" title="Seguir <?= e($name) ?>">
+                                <i class="fa fa-user-plus"></i> <span>Seguir</span>
+                            </button>
+                        <?php endif; ?>
+                    </form>
+                <?php else: ?>
+                    <a href="/admin/login" class="follow-btn follow-cta" title="Entre para seguir este colecionador">
+                        <i class="fa fa-user-plus"></i> <span>Seguir</span>
+                    </a>
+                <?php endif; ?>
+            <?php endif; ?>
+            <a href="/u/<?= e($col['slug']) ?>" class="md-btn md-btn-primary collections-card-btn">Ver garagem <i class="fa fa-arrow-right"></i></a>
+        </div>
     </div>
 </article>
 <?php
@@ -146,6 +223,7 @@ $render_card = function (array $col) use ($brand_map): void {
             <option value="featured" <?= $sort === 'featured' ? 'selected' : '' ?>>Destaque</option>
             <option value="minis"    <?= $sort === 'minis'    ? 'selected' : '' ?>>Mais miniaturas</option>
             <option value="recent"   <?= $sort === 'recent'   ? 'selected' : '' ?>>Mais recentes</option>
+            <option value="followers"<?= $sort === 'followers'? ' selected' : '' ?>>Mais seguidos</option>
             <option value="name"     <?= $sort === 'name'     ? 'selected' : '' ?>>Nome</option>
         </select>
         <button type="submit" class="md-btn md-btn-primary collections-apply"><i class="fa fa-arrow-right"></i><span class="collections-apply-text">Buscar</span></button>
