@@ -2337,74 +2337,6 @@ body.admin-layout {
 
 /* ═══ Perfil público de coleção (/u/{slug}) ═══════════════════════════ */
 /* Barra compacta + seções colapsáveis */
-.cp-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  background: var(--surface-raised);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-lg);
-  padding: 0.7rem 0.9rem;
-  margin-bottom: 0.9rem;
-}
-.cp-bar-id {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  min-width: 0;
-}
-.cp-bar-avatar {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  overflow: hidden;
-  flex-shrink: 0;
-  border: 1px solid var(--line-strong);
-  background: var(--surface-base);
-}
-.cp-bar-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.cp-bar-initial {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  background: var(--amber-core);
-  color: var(--surface-base);
-  font-weight: 800;
-  font-size: 1.2rem;
-}
-.cp-bar-meta {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.cp-bar-name {
-  font-weight: 800;
-  color: var(--ink-primary);
-  font-size: 1.05rem;
-  line-height: 1.15;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.cp-bar-handle {
-  font-size: 0.78rem;
-  color: var(--amber-core);
-  font-weight: 600;
-}
-.cp-bar-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-}
 .cp-toolbtn {
   display: inline-flex;
   align-items: center;
@@ -2464,10 +2396,7 @@ body.admin-layout {
   }
 }
 @media (max-width: 575.98px) {
-  .cp-bar-actions {
-    width: 100%;
-  }
-  .cp-toolbtn {
+  .cp-toolbar .cp-toolbtn {
     flex: 1 1 auto;
     justify-content: center;
   }
@@ -2532,6 +2461,17 @@ body.admin-layout {
   margin: 0.55rem 0 0;
   max-width: 60ch;
 }
+.cp-profile-info {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cp-profile-eyebrow {
+  margin-bottom: 0.35rem;
+}
+.cp-profile-follow {
+  flex-shrink: 0;
+  align-self: center;
+}
 @media (max-width: 575.98px) {
   .cp-profile {
     flex-direction: column;
@@ -2541,6 +2481,14 @@ body.admin-layout {
   .cp-profile-bio {
     margin-left: auto;
     margin-right: auto;
+  }
+  .cp-profile-follow {
+    width: 100%;
+  }
+  .cp-profile-follow .follow-form,
+  .cp-profile-follow .follow-btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 
@@ -2591,6 +2539,50 @@ body.admin-layout {
     font-size: 0.62rem;
     letter-spacing: 0.02em;
     overflow-wrap: anywhere;
+  }
+}
+
+/* Tiles de estatística clicáveis (seguidores / seguindo) */
+.cp-stat-link {
+  text-decoration: none;
+  display: block;
+  transition:
+    border-color 0.15s ease,
+    transform 0.12s ease;
+}
+.cp-stat-link:hover {
+  border-color: var(--line-amber);
+  transform: translateY(-2px);
+}
+.cp-stat-link:hover .cp-stat-num {
+  color: var(--amber-bright);
+}
+
+/* Toolbar de exploração — rótulo da coleção + botão de filtros */
+.cp-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 1.25rem 0 0.9rem;
+}
+.cp-toolbar-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink-secondary);
+  min-width: 0;
+}
+.cp-toolbar-label i {
+  color: var(--amber-core);
+}
+@media (max-width: 575.98px) {
+  .cp-toolbar {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 

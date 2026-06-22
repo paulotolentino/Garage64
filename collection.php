@@ -113,80 +113,16 @@ $has_active_filters = (bool) array_filter(array_intersect_key(
     $filters, array_flip(['manufacturer','scale','category_id','condition','location','search','tag_id'])
 ));
 
-// Estado dos painéis colapsáveis persistido via query string (?about=1 / ?filters=1).
-$open_about   = !empty($_GET['about']);
+// Estado do painel de filtros persistido via query string (?filters=1).
 $open_filters = $has_active_filters || !empty($_GET['filters']);
 $panel_qs = [];
-if ($open_about)   $panel_qs['about']   = 1;
 if ($open_filters) $panel_qs['filters'] = 1;
 $clear_url = $base_url . ($panel_qs ? '?' . http_build_query($panel_qs) : '');
 
 require_once __DIR__ . '/includes/header_public.php';
 ?>
 
-<!-- Barra compacta (sempre visível) ───────────────────────────────────── -->
-<div class="cp-bar">
-    <div class="cp-bar-id">
-        <div class="cp-bar-avatar">
-            <?php if ($owner_avatar): ?>
-                <img src="<?= e(avatar_url($owner_avatar)) ?>" alt="<?= e($display_name) ?>">
-            <?php else: ?>
-                <span class="cp-bar-initial"><?= mb_strtoupper(mb_substr($display_name, 0, 1)) ?></span>
-            <?php endif; ?>
-        </div>
-        <div class="cp-bar-meta">
-            <span class="cp-bar-name"><?= e($display_name) ?></span>
-            <span class="cp-bar-handle">@<?= e($slug) ?> · <?= number_format($collection_total) ?> peça<?= $collection_total !== 1 ? 's' : '' ?></span>
-        </div>
-        <div class="follow-control">
-            <div class="follow-counts" aria-label="Seguidores e seguindo">
-                <a class="follow-count" href="/u/<?= e($slug) ?>/seguidores"><strong><?= number_format($followers_count) ?></strong> <?= $followers_count === 1 ? 'seguidor' : 'seguidores' ?></a>
-                <span class="follow-count-sep" aria-hidden="true">·</span>
-                <a class="follow-count" href="/u/<?= e($slug) ?>/seguindo"><strong><?= number_format($following_count) ?></strong> seguindo</a>
-            </div>
-            <?php if (!$is_own_garage): ?>
-                <?php if (is_logged_in()): ?>
-                    <form method="post" action="/u/<?= e($slug) ?>" class="follow-form">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="action" value="<?= $viewer_is_following ? 'unfollow' : 'follow' ?>">
-                        <?php if ($viewer_is_following): ?>
-                            <button type="submit" class="follow-btn is-following" title="Deixar de seguir <?= e($display_name) ?>">
-                                <span class="follow-state follow-state-default"><i class="fa fa-user-check"></i> Seguindo</span>
-                                <span class="follow-state follow-state-hover"><i class="fa fa-user-xmark"></i> Deixar de seguir</span>
-                            </button>
-                        <?php else: ?>
-                            <button type="submit" class="follow-btn" title="Seguir <?= e($display_name) ?>">
-                                <i class="fa fa-user-plus"></i> <span>Seguir</span>
-                            </button>
-                        <?php endif; ?>
-                    </form>
-                <?php else: ?>
-                    <a href="/admin/login" class="follow-btn follow-cta" title="Entre para seguir este colecionador">
-                        <i class="fa fa-user-plus"></i> <span>Seguir</span>
-                    </a>
-                <?php endif; ?>
-            <?php endif; ?>
-        </div>
-    </div>
-    <div class="cp-bar-actions">
-        <button type="button" class="cp-toolbtn <?= $open_about ? 'is-open' : '' ?>" id="btnAbout"
-                aria-expanded="<?= $open_about ? 'true' : 'false' ?>" aria-controls="cpAbout">
-            <i class="fa fa-circle-info"></i>
-            <span>Sobre o colecionador</span>
-            <i class="fa fa-chevron-down cp-tool-caret"></i>
-        </button>
-        <button type="button" class="cp-toolbtn <?= $open_filters ? 'is-open' : '' ?>" id="btnFilters"
-                aria-expanded="<?= $open_filters ? 'true' : 'false' ?>" aria-controls="cpFilters">
-            <i class="fa fa-sliders"></i>
-            <span>Filtros</span>
-            <i class="fa fa-chevron-down cp-tool-caret"></i>
-        </button>
-    </div>
-</div>
-
-<!-- Painel do colecionador (colapsado por padrão) ─────────────────────── -->
-<div id="cpAbout" class="cp-collapse <?= $open_about ? 'is-open' : '' ?>">
-<!-- Cabeçalho de perfil ──────────────────────────────────────────────── -->
+<!-- Identidade do colecionador (sempre visível) ───────────────────────── -->
 <section class="cp-profile">
     <div class="cp-profile-avatar">
         <?php if ($owner_avatar): ?>
@@ -196,6 +132,7 @@ require_once __DIR__ . '/includes/header_public.php';
         <?php endif; ?>
     </div>
     <div class="cp-profile-info">
+        <p class="lp-eyebrow cp-profile-eyebrow">Garagem de colecionador</p>
         <h1 class="cp-profile-name"><?= e($display_name) ?></h1>
         <div class="cp-profile-handle">
             @<?= e($slug) ?><?php if ($owner_since): ?> <span class="cp-profile-since">· na garagem desde <?= e(date('Y', strtotime($owner_since))) ?></span><?php endif; ?>
@@ -204,14 +141,46 @@ require_once __DIR__ . '/includes/header_public.php';
             <p class="cp-profile-bio"><?= e($owner['bio']) ?></p>
         <?php endif; ?>
     </div>
+    <?php if (!$is_own_garage): ?>
+    <div class="cp-profile-follow">
+        <?php if (is_logged_in()): ?>
+            <form method="post" action="/u/<?= e($slug) ?>" class="follow-form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="<?= $viewer_is_following ? 'unfollow' : 'follow' ?>">
+                <?php if ($viewer_is_following): ?>
+                    <button type="submit" class="follow-btn is-following" title="Deixar de seguir <?= e($display_name) ?>">
+                        <span class="follow-state follow-state-default"><i class="fa fa-user-check"></i> Seguindo</span>
+                        <span class="follow-state follow-state-hover"><i class="fa fa-user-xmark"></i> Deixar de seguir</span>
+                    </button>
+                <?php else: ?>
+                    <button type="submit" class="follow-btn" title="Seguir <?= e($display_name) ?>">
+                        <i class="fa fa-user-plus"></i> <span>Seguir</span>
+                    </button>
+                <?php endif; ?>
+            </form>
+        <?php else: ?>
+            <a href="/admin/login" class="follow-btn follow-cta" title="Entre para seguir este colecionador">
+                <i class="fa fa-user-plus"></i> <span>Seguir</span>
+            </a>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
 </section>
 
-<!-- Estatísticas da garagem ──────────────────────────────────────────── -->
+<!-- Estatísticas — identidade + social + coleção (sempre visíveis) ─────── -->
 <div class="cp-stats">
     <div class="cp-stat">
         <span class="cp-stat-num"><?= number_format($collection_total) ?></span>
         <span class="cp-stat-lbl">peça<?= $collection_total !== 1 ? 's' : '' ?></span>
     </div>
+    <a class="cp-stat cp-stat-link" href="/u/<?= e($slug) ?>/seguidores">
+        <span class="cp-stat-num"><?= number_format($followers_count) ?></span>
+        <span class="cp-stat-lbl"><?= $followers_count === 1 ? 'seguidor' : 'seguidores' ?></span>
+    </a>
+    <a class="cp-stat cp-stat-link" href="/u/<?= e($slug) ?>/seguindo">
+        <span class="cp-stat-num"><?= number_format($following_count) ?></span>
+        <span class="cp-stat-lbl">seguindo</span>
+    </a>
     <div class="cp-stat">
         <span class="cp-stat-num"><?= number_format(count($manufacturers)) ?></span>
         <span class="cp-stat-lbl">fabricante<?= count($manufacturers) !== 1 ? 's' : '' ?></span>
@@ -227,13 +196,23 @@ require_once __DIR__ . '/includes/header_public.php';
     </div>
     <?php endif; ?>
 </div>
-</div><!-- /#cpAbout -->
+
+<!-- Toolbar de exploração (apenas filtros é colapsável) ────────────────── -->
+<div class="cp-toolbar">
+    <span class="cp-toolbar-label"><i class="fa fa-warehouse"></i> Coleção de <?= e($display_name) ?></span>
+    <button type="button" class="cp-toolbtn <?= $open_filters ? 'is-open' : '' ?>" id="btnFilters"
+            aria-expanded="<?= $open_filters ? 'true' : 'false' ?>" aria-controls="cpFilters">
+        <i class="fa fa-sliders"></i>
+        <span>Filtros<?= $has_active_filters ? ' ativos' : '' ?></span>
+        <i class="fa fa-chevron-down cp-tool-caret"></i>
+    </button>
+</div>
+
 
 <!-- Filtros (colapsados; abrem expandidos se houver filtro ativo) ──────── -->
 <div id="cpFilters" class="cp-collapse <?= $open_filters ? 'is-open' : '' ?>">
 <!-- Barra de exploração ────────────────────────────────────────────── -->
 <form method="get" class="cp-explore">
-    <input type="hidden" name="about" id="hidAbout" value="1"<?= $open_about ? '' : ' disabled' ?>>
     <input type="hidden" name="filters" id="hidFilters" value="1"<?= $open_filters ? '' : ' disabled' ?>>
     <div class="cp-explore-search">
         <i class="fa fa-magnifying-glass"></i>
@@ -446,22 +425,17 @@ require_once __DIR__ . '/includes/header_public.php';
 </script>
 <script>
 (function () {
-    const aboutPanel = document.getElementById('cpAbout');
     const filtersPanel = document.getElementById('cpFilters');
-    const hidAbout = document.getElementById('hidAbout');
     const hidFilters = document.getElementById('hidFilters');
 
     function isOpen(p) { return !!(p && p.classList.contains('is-open')); }
 
     function sync() {
-        const a = isOpen(aboutPanel);
         const f = isOpen(filtersPanel);
-        if (hidAbout) hidAbout.disabled = !a;
         if (hidFilters) hidFilters.disabled = !f;
         document.querySelectorAll('[data-cp-nav]').forEach(function (link) {
             try {
                 const u = new URL(link.getAttribute('href'), window.location.href);
-                if (a) u.searchParams.set('about', '1'); else u.searchParams.delete('about');
                 if (f) u.searchParams.set('filters', '1'); else u.searchParams.delete('filters');
                 link.setAttribute('href', u.pathname + u.search);
             } catch (e) { /* ignora links inválidos */ }
@@ -478,7 +452,6 @@ require_once __DIR__ . '/includes/header_public.php';
             sync();
         });
     }
-    wire('btnAbout', aboutPanel);
     wire('btnFilters', filtersPanel);
     sync();
 })();
