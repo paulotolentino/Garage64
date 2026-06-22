@@ -19,6 +19,33 @@ if (!$owner) {
 
 $uid = (int) $owner['id'];
 
+// ─── Seguir / Deixar de seguir (POST) ────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array($_POST['action'], ['follow', 'unfollow'], true)) {
+    // Usuário deslogado é direcionado ao login ao tentar seguir.
+    if (!is_logged_in()) {
+        header('Location: /admin/login');
+        exit;
+    }
+    verify_csrf();
+    $me = current_user_id();
+    if ($me !== $uid) { // nunca seguir a si mesmo
+        if ($_POST['action'] === 'follow') {
+            follow_user($me, $uid);
+            // Best-effort: notifica o colecionador seguido (sem miniatura, sem self, dedup interno).
+            try {
+                create_notification(
+                    $uid, $me, 'follow',
+                    null, null, '/u/' . current_user_slug(), $uid
+                );
+            } catch (Throwable $e) { /* nunca bloqueia o follow */ }
+        } else {
+            unfollow_user($me, $uid);
+        }
+    }
+    header('Location: /u/' . rawurlencode($slug));
+    exit;
+}
+
 $filters = [
     'manufacturer' => trim($_GET['manufacturer'] ?? ''),
     'scale'        => trim($_GET['scale'] ?? ''),
@@ -76,6 +103,12 @@ try {
     $featured_total = (int) $st->fetchColumn();
 } catch (\Throwable $e) { /* coluna is_featured pode não existir */ }
 
+// Relacionamento social (seguir colecionadores — estilo Instagram).
+$followers_count     = count_followers($uid);
+$following_count     = count_following($uid);
+$is_own_garage       = is_logged_in() && current_user_id() === $uid;
+$viewer_is_following = is_logged_in() && !$is_own_garage && is_following(current_user_id(), $uid);
+
 $has_active_filters = (bool) array_filter(array_intersect_key(
     $filters, array_flip(['manufacturer','scale','category_id','condition','location','search','tag_id'])
 ));
@@ -104,6 +137,35 @@ require_once __DIR__ . '/includes/header_public.php';
         <div class="cp-bar-meta">
             <span class="cp-bar-name"><?= e($display_name) ?></span>
             <span class="cp-bar-handle">@<?= e($slug) ?> · <?= number_format($collection_total) ?> peça<?= $collection_total !== 1 ? 's' : '' ?></span>
+        </div>
+        <div class="follow-control">
+            <div class="follow-counts" aria-label="Seguidores e seguindo">
+                <span class="follow-count"><strong><?= number_format($followers_count) ?></strong> <?= $followers_count === 1 ? 'seguidor' : 'seguidores' ?></span>
+                <span class="follow-count-sep" aria-hidden="true">·</span>
+                <span class="follow-count"><strong><?= number_format($following_count) ?></strong> seguindo</span>
+            </div>
+            <?php if (!$is_own_garage): ?>
+                <?php if (is_logged_in()): ?>
+                    <form method="post" action="/u/<?= e($slug) ?>" class="follow-form">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="<?= $viewer_is_following ? 'unfollow' : 'follow' ?>">
+                        <?php if ($viewer_is_following): ?>
+                            <button type="submit" class="follow-btn is-following" title="Deixar de seguir <?= e($display_name) ?>">
+                                <span class="follow-state follow-state-default"><i class="fa fa-user-check"></i> Seguindo</span>
+                                <span class="follow-state follow-state-hover"><i class="fa fa-user-xmark"></i> Deixar de seguir</span>
+                            </button>
+                        <?php else: ?>
+                            <button type="submit" class="follow-btn" title="Seguir <?= e($display_name) ?>">
+                                <i class="fa fa-user-plus"></i> <span>Seguir</span>
+                            </button>
+                        <?php endif; ?>
+                    </form>
+                <?php else: ?>
+                    <a href="/admin/login" class="follow-btn follow-cta" title="Entre para seguir este colecionador">
+                        <i class="fa fa-user-plus"></i> <span>Seguir</span>
+                    </a>
+                <?php endif; ?>
+            <?php endif; ?>
         </div>
     </div>
     <div class="cp-bar-actions">

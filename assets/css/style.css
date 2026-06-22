@@ -721,6 +721,93 @@ a:hover {
   }
 }
 
+/* ── Seguir colecionadores (follow-*) ─────────────────────────────── */
+.follow-control {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.follow-counts {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.follow-count strong {
+  color: var(--ink-primary);
+  font-weight: 700;
+}
+.follow-count-sep {
+  color: var(--ink-faint);
+}
+.follow-form {
+  margin: 0;
+}
+.follow-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.95rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--amber-core);
+  background: var(--amber-core);
+  color: var(--surface-pit);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    border-color 0.16s ease,
+    color 0.16s ease,
+    background-color 0.16s ease,
+    transform 0.12s ease;
+}
+.follow-btn:hover {
+  background: var(--amber-bright);
+  border-color: var(--amber-bright);
+}
+.follow-btn:active {
+  transform: scale(0.96);
+}
+/* Estado "Seguindo": neutro, troca para "Deixar de seguir" (vermelho) no hover */
+.follow-btn.is-following {
+  background: var(--surface-inlay);
+  border-color: var(--line-strong);
+  color: var(--ink-secondary);
+}
+.follow-btn.is-following:hover {
+  background: var(--surface-inlay);
+  border-color: #f87171;
+  color: #f87171;
+}
+.follow-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.follow-state-hover {
+  display: none;
+}
+.follow-btn.is-following:hover .follow-state-default {
+  display: none;
+}
+.follow-btn.is-following:hover .follow-state-hover {
+  display: inline-flex;
+}
+@media (max-width: 575.98px) {
+  .follow-control {
+    width: 100%;
+    justify-content: space-between;
+    margin-top: 0.4rem;
+  }
+}
+
 .md-nav {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -5645,6 +5732,10 @@ body.admin-layout {
 .notif-type-like .notif-badge {
   background: var(--amber-core);
   color: #1a1206;
+}
+.notif-type-follow .notif-badge {
+  background: var(--state-grail);
+  color: #fff;
 }
 
 /* Texto */

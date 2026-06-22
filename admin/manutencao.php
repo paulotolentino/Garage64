@@ -141,6 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
         'au_is_featured'   => ['admin_users', 'is_featured',    "ALTER TABLE admin_users ADD COLUMN is_featured TINYINT(1) NOT NULL DEFAULT 0"],
         'cmt_parent_id'    => ['miniature_comments', 'parent_id', "ALTER TABLE miniature_comments ADD COLUMN parent_id INT UNSIGNED NULL DEFAULT NULL AFTER user_id"],
         'cmt_is_pinned'    => ['miniature_comments', 'is_pinned', "ALTER TABLE miniature_comments ADD COLUMN is_pinned TINYINT(1) NOT NULL DEFAULT 0 AFTER body"],
+        'notif_target_user'=> ['notifications', 'target_user_id', "ALTER TABLE notifications ADD COLUMN target_user_id INT UNSIGNED NULL DEFAULT NULL AFTER miniature_id"],
     ];
 
     // Table migrations — checked via information_schema.tables
@@ -169,18 +170,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             user_id INT UNSIGNED NOT NULL,
             actor_user_id INT UNSIGNED NOT NULL,
-            type ENUM('comment','reply','mention','like') NOT NULL,
-            miniature_id INT UNSIGNED NOT NULL,
+            type ENUM('comment','reply','mention','like','follow') NOT NULL,
+            miniature_id INT UNSIGNED NULL,
+            target_user_id INT UNSIGNED NULL,
             comment_id INT UNSIGNED NULL,
             target_url VARCHAR(255) NOT NULL,
             is_read TINYINT(1) NOT NULL DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             KEY idx_notif_user_unread (user_id, is_read, created_at),
             KEY idx_notif_miniature (miniature_id),
+            KEY idx_notif_target_user (target_user_id),
             KEY idx_notif_comment (comment_id),
             FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE,
             FOREIGN KEY (actor_user_id) REFERENCES admin_users(id) ON DELETE CASCADE,
             FOREIGN KEY (miniature_id) REFERENCES miniatures(id) ON DELETE CASCADE,
+            FOREIGN KEY (target_user_id) REFERENCES admin_users(id) ON DELETE CASCADE,
             FOREIGN KEY (comment_id) REFERENCES miniature_comments(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
         'miniature_likes' => "CREATE TABLE miniature_likes (
@@ -193,6 +197,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
             KEY idx_likes_user (user_id),
             FOREIGN KEY (miniature_id) REFERENCES miniatures(id) ON DELETE CASCADE,
             FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'user_follows' => "CREATE TABLE user_follows (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            follower_id INT UNSIGNED NOT NULL,
+            following_id INT UNSIGNED NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_follow (follower_id, following_id),
+            KEY idx_follow_following (following_id),
+            KEY idx_follow_follower (follower_id),
+            FOREIGN KEY (follower_id) REFERENCES admin_users(id) ON DELETE CASCADE,
+            FOREIGN KEY (following_id) REFERENCES admin_users(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     ];
     $check_table = db()->prepare(
@@ -234,7 +249,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
         }
     }
 
-    // ENUM expansion for notifications.type — add 'like' to existing installs.
+    // ENUM expansion for notifications.type — add 'like' + 'follow' to existing installs.
     try {
         $chk_notif_type = db()->prepare(
             "SELECT COLUMN_TYPE FROM information_schema.columns
@@ -244,11 +259,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
         $notif_type = $chk_notif_type->fetchColumn();
         if (!$notif_type) {
             $skipped[] = 'enum:notifications.type (table missing)';
-        } elseif (str_contains((string) $notif_type, "'like'")) {
+        } elseif (str_contains((string) $notif_type, "'like'") && str_contains((string) $notif_type, "'follow'")) {
             $skipped[] = 'enum:notifications.type';
         } else {
             db()->exec(
-                "ALTER TABLE notifications MODIFY COLUMN type ENUM('comment','reply','mention','like') NOT NULL"
+                "ALTER TABLE notifications MODIFY COLUMN type ENUM('comment','reply','mention','like','follow') NOT NULL"
             );
             $applied[] = 'enum:notifications.type';
         }
@@ -277,6 +292,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
         } catch (Throwable $e) {
             $errors[] = 'col:' . $key . ': ' . $e->getMessage();
         }
+    }
+
+    // notifications.miniature_id → NULLABLE (follow notifications have no miniature).
+    // Existing rows keep their values; the FK ignores NULLs, so it is preserved.
+    try {
+        $chk_mini_null = db()->prepare(
+            "SELECT IS_NULLABLE FROM information_schema.columns
+             WHERE table_schema = DATABASE() AND table_name = 'notifications' AND column_name = 'miniature_id'"
+        );
+        $chk_mini_null->execute();
+        $mini_nullable = $chk_mini_null->fetchColumn();
+        if ($mini_nullable === false) {
+            $skipped[] = 'null:notifications.miniature_id (table missing)';
+        } elseif (strtoupper((string) $mini_nullable) === 'YES') {
+            $skipped[] = 'null:notifications.miniature_id';
+        } else {
+            db()->exec("ALTER TABLE notifications MODIFY COLUMN miniature_id INT UNSIGNED NULL");
+            $applied[] = 'null:notifications.miniature_id';
+        }
+    } catch (Throwable $e) {
+        $errors[] = 'null:notifications.miniature_id: ' . $e->getMessage();
+    }
+
+    // notifications.target_user_id → FK to admin_users (column added above via $columns).
+    try {
+        $chk_tu_col = db()->prepare(
+            "SELECT COUNT(*) FROM information_schema.columns
+             WHERE table_schema = DATABASE() AND table_name = 'notifications' AND column_name = 'target_user_id'"
+        );
+        $chk_tu_col->execute();
+        if ((int) $chk_tu_col->fetchColumn() === 0) {
+            $skipped[] = 'fk:notifications.target_user_id (column missing)';
+        } else {
+            $chk_tu_fk = db()->prepare(
+                "SELECT COUNT(*) FROM information_schema.key_column_usage
+                 WHERE table_schema = DATABASE() AND table_name = 'notifications'
+                   AND column_name = 'target_user_id' AND referenced_table_name = 'admin_users'"
+            );
+            $chk_tu_fk->execute();
+            if ((int) $chk_tu_fk->fetchColumn() > 0) {
+                $skipped[] = 'fk:notifications.target_user_id';
+            } else {
+                db()->exec(
+                    "ALTER TABLE notifications
+                     ADD CONSTRAINT fk_notif_target_user
+                     FOREIGN KEY (target_user_id) REFERENCES admin_users(id) ON DELETE CASCADE"
+                );
+                $applied[] = 'fk:notifications.target_user_id';
+            }
+        }
+    } catch (Throwable $e) {
+        $errors[] = 'fk:notifications.target_user_id: ' . $e->getMessage();
     }
 
     // Post-column data fixes

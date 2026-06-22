@@ -427,6 +427,50 @@ function avatar_url(?string $avatar): string {
     return APP_URL . '/assets/img/avatar-default.svg';
 }
 
+// ─── Follows (social module — Phase 7, Instagram-style one-way follow) ────────
+
+/** Creates a follow relationship (idempotent — UNIQUE prevents duplicates; self-follow blocked). */
+function follow_user(int $follower_id, int $following_id): void {
+    if ($follower_id <= 0 || $following_id <= 0 || $follower_id === $following_id) return;
+    db()->prepare(
+        'INSERT IGNORE INTO user_follows (follower_id, following_id) VALUES (?, ?)'
+    )->execute([$follower_id, $following_id]);
+}
+
+/** Removes a follow relationship (no-op if it doesn't exist). */
+function unfollow_user(int $follower_id, int $following_id): void {
+    if ($follower_id <= 0 || $following_id <= 0) return;
+    db()->prepare(
+        'DELETE FROM user_follows WHERE follower_id = ? AND following_id = ?'
+    )->execute([$follower_id, $following_id]);
+}
+
+/** Whether $follower_id currently follows $following_id. */
+function is_following(int $follower_id, int $following_id): bool {
+    if ($follower_id <= 0 || $following_id <= 0) return false;
+    $stmt = db()->prepare(
+        'SELECT 1 FROM user_follows WHERE follower_id = ? AND following_id = ? LIMIT 1'
+    );
+    $stmt->execute([$follower_id, $following_id]);
+    return (bool) $stmt->fetchColumn();
+}
+
+/** How many users follow $user_id. */
+function count_followers(int $user_id): int {
+    if ($user_id <= 0) return 0;
+    $stmt = db()->prepare('SELECT COUNT(*) FROM user_follows WHERE following_id = ?');
+    $stmt->execute([$user_id]);
+    return (int) $stmt->fetchColumn();
+}
+
+/** How many users $user_id follows. */
+function count_following(int $user_id): int {
+    if ($user_id <= 0) return 0;
+    $stmt = db()->prepare('SELECT COUNT(*) FROM user_follows WHERE follower_id = ?');
+    $stmt->execute([$user_id]);
+    return (int) $stmt->fetchColumn();
+}
+
 // ─── Wishlist ────────────────────────────────────────────────────────────────
 
 function get_wishlist(string $status = '', int $user_id = 0): array {
@@ -1032,19 +1076,23 @@ function get_mentioned_users_from_comment_body(string $body): array {
  * Inserts a single notification.
  * - never notifies the actor themselves
  * - skips duplicates of the same type for the same comment + recipient
+ * - 'like' / 'follow' carry no comment_id: deduped by recipient + actor + type
+ * - $miniature_id is NULL for notifications not tied to a miniature (e.g. follow)
+ * - $target_user_id references the subject user of a non-miniature notification
  * Returns true on insert, false otherwise.
  */
 function create_notification(
     int $user_id,
     int $actor_user_id,
     string $type,
-    int $miniature_id,
+    ?int $miniature_id,
     ?int $comment_id,
-    string $target_url
+    string $target_url,
+    ?int $target_user_id = null
 ): bool {
     if ($user_id <= 0 || $actor_user_id <= 0) return false;
     if ($user_id === $actor_user_id) return false; // no self-notification
-    if (!in_array($type, ['comment', 'reply', 'mention', 'like'], true)) return false;
+    if (!in_array($type, ['comment', 'reply', 'mention', 'like', 'follow'], true)) return false;
     try {
         // Avoid duplicate notifications of the same type for the same comment.
         if ($comment_id !== null) {
@@ -1061,12 +1109,20 @@ function create_notification(
             );
             $chk->execute([$user_id, $actor_user_id, $type, $miniature_id]);
             if ($chk->fetchColumn()) return false;
+        } elseif ($type === 'follow') {
+            // Follows carry no miniature/comment: dedupe by recipient + actor + type,
+            // so unfollow→follow cycles never create a second notification.
+            $chk = db()->prepare(
+                'SELECT 1 FROM notifications WHERE user_id = ? AND actor_user_id = ? AND type = ? LIMIT 1'
+            );
+            $chk->execute([$user_id, $actor_user_id, $type]);
+            if ($chk->fetchColumn()) return false;
         }
         $stmt = db()->prepare(
-            'INSERT INTO notifications (user_id, actor_user_id, type, miniature_id, comment_id, target_url)
-             VALUES (?, ?, ?, ?, ?, ?)'
+            'INSERT INTO notifications (user_id, actor_user_id, type, miniature_id, target_user_id, comment_id, target_url)
+             VALUES (?, ?, ?, ?, ?, ?, ?)'
         );
-        return $stmt->execute([$user_id, $actor_user_id, $type, $miniature_id, $comment_id, $target_url]);
+        return $stmt->execute([$user_id, $actor_user_id, $type, $miniature_id, $target_user_id, $comment_id, $target_url]);
     } catch (Throwable $e) {
         return false;
     }
@@ -1140,7 +1196,7 @@ function get_user_notifications(int $user_id, int $limit = 50): array {
     $limit = max(1, min(100, $limit));
     try {
         $stmt = db()->prepare(
-            'SELECT n.id, n.user_id, n.actor_user_id, n.type, n.miniature_id, n.comment_id,
+            'SELECT n.id, n.user_id, n.actor_user_id, n.type, n.miniature_id, n.target_user_id, n.comment_id,
                     n.target_url, n.is_read, n.created_at,
                     a.display_name AS actor_name, a.username AS actor_username, a.slug AS actor_slug,
                     a.avatar AS actor_avatar,
