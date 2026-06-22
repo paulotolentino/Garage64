@@ -392,7 +392,7 @@ foreach ($comments as $cRoot) { $comments_total += 1 + count($cRoot['replies']);
                 $root_id   = (int) $c['id'];
             ?>
                 <li class="cm-item <?= $pinned ? 'cm-item-pinned' : '' ?>" id="comment-<?= $root_id ?>">
-                    <div class="cm-avatar"><i class="fa fa-user"></i></div>
+                    <div class="cm-avatar"><img src="<?= e(avatar_url($c['avatar'] ?? null)) ?>" alt="<?= e($author) ?>" loading="lazy"></div>
                     <div class="cm-body-wrap">
                         <?php if ($pinned): ?>
                             <div class="cm-pin-seal"><i class="fa fa-thumbtack"></i> Destacado pelo colecionador</div>
@@ -449,7 +449,7 @@ foreach ($comments as $cRoot) { $comments_total += 1 + count($cRoot['replies']);
                                     $rcan_del = can_delete_miniature_comment($r, $miniature);
                                 ?>
                                     <li class="cm-item cm-item-reply" id="comment-<?= (int) $r['id'] ?>">
-                                        <div class="cm-avatar"><i class="fa fa-user"></i></div>
+                                        <div class="cm-avatar"><img src="<?= e(avatar_url($r['avatar'] ?? null)) ?>" alt="<?= e($rauthor) ?>" loading="lazy"></div>
                                         <div class="cm-body-wrap">
                                             <div class="cm-head">
                                                 <span class="cm-author"><?= e($rauthor) ?></span>

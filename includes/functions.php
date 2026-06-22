@@ -995,7 +995,7 @@ function get_miniature_comments(int $miniature_id): array {
     try {
         $stmt = db()->prepare(
             'SELECT c.id, c.miniature_id, c.user_id, c.parent_id, c.body, c.is_pinned, c.created_at,
-                    u.display_name, u.username, u.slug
+                    u.display_name, u.username, u.slug, u.avatar
              FROM miniature_comments c
              JOIN admin_users u ON u.id = c.user_id
              WHERE c.miniature_id = ?
