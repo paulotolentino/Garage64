@@ -20,7 +20,7 @@ if (!$miniature || !$miniature['is_public']) {
 
 $photos   = get_miniature_photos($id);
 $tags     = get_miniature_tags($id);
-$adjacent = get_adjacent_miniatures($id);
+$adjacent = get_adjacent_miniatures($id, (int) ($miniature['user_id'] ?? 0));
 // Increment view counter (best-effort, ignore errors)
 try {
     db()->prepare('UPDATE miniatures SET views = views + 1 WHERE id = ?')->execute([$id]);
