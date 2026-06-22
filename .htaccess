@@ -52,6 +52,10 @@ ErrorDocument 404 /404.php
     # Miniature detail: /mini/{id} or /mini/{id}/{slug}
     RewriteRule ^mini/(\d+)(/[^/]*)?/?$ miniature.php?id=$1 [L,QSA]
 
+    # User follows lists: /u/{slug}/seguidores and /u/{slug}/seguindo
+    RewriteRule ^u/([a-z0-9_-]{2,30})/seguidores/?$ follows.php?slug=$1&view=followers [L,QSA]
+    RewriteRule ^u/([a-z0-9_-]{2,30})/seguindo/?$ follows.php?slug=$1&view=following [L,QSA]
+
     # User collection: /u/{slug}
     RewriteRule ^u/([a-z0-9_-]{2,30})/?$ collection.php?slug=$1 [L,QSA]
 

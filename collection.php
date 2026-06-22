@@ -140,9 +140,9 @@ require_once __DIR__ . '/includes/header_public.php';
         </div>
         <div class="follow-control">
             <div class="follow-counts" aria-label="Seguidores e seguindo">
-                <span class="follow-count"><strong><?= number_format($followers_count) ?></strong> <?= $followers_count === 1 ? 'seguidor' : 'seguidores' ?></span>
+                <a class="follow-count" href="/u/<?= e($slug) ?>/seguidores"><strong><?= number_format($followers_count) ?></strong> <?= $followers_count === 1 ? 'seguidor' : 'seguidores' ?></a>
                 <span class="follow-count-sep" aria-hidden="true">·</span>
-                <span class="follow-count"><strong><?= number_format($following_count) ?></strong> seguindo</span>
+                <a class="follow-count" href="/u/<?= e($slug) ?>/seguindo"><strong><?= number_format($following_count) ?></strong> seguindo</a>
             </div>
             <?php if (!$is_own_garage): ?>
                 <?php if (is_logged_in()): ?>

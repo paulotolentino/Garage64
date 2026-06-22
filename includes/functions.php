@@ -471,6 +471,50 @@ function count_following(int $user_id): int {
     return (int) $stmt->fetchColumn();
 }
 
+/**
+ * Collectors who follow $user_id (newest first), with public-miniature counts.
+ * Excludes banned users. Never selects private columns.
+ */
+function get_followers(int $user_id): array {
+    if ($user_id <= 0) return [];
+    try {
+        $stmt = db()->prepare(
+            "SELECT u.id, u.username, u.slug, u.display_name, u.bio, u.avatar,
+                    (SELECT COUNT(*) FROM miniatures m WHERE m.user_id = u.id AND m.is_public = 1) AS mini_count
+             FROM user_follows f
+             JOIN admin_users u ON u.id = f.follower_id AND u.is_banned = 0
+             WHERE f.following_id = ?
+             ORDER BY f.created_at DESC"
+        );
+        $stmt->execute([$user_id]);
+        return $stmt->fetchAll();
+    } catch (\PDOException $e) {
+        return []; // graceful: e.g. legacy DB without avatar column
+    }
+}
+
+/**
+ * Collectors that $user_id follows (newest first), with public-miniature counts.
+ * Excludes banned users. Never selects private columns.
+ */
+function get_following(int $user_id): array {
+    if ($user_id <= 0) return [];
+    try {
+        $stmt = db()->prepare(
+            "SELECT u.id, u.username, u.slug, u.display_name, u.bio, u.avatar,
+                    (SELECT COUNT(*) FROM miniatures m WHERE m.user_id = u.id AND m.is_public = 1) AS mini_count
+             FROM user_follows f
+             JOIN admin_users u ON u.id = f.following_id AND u.is_banned = 0
+             WHERE f.follower_id = ?
+             ORDER BY f.created_at DESC"
+        );
+        $stmt->execute([$user_id]);
+        return $stmt->fetchAll();
+    } catch (\PDOException $e) {
+        return [];
+    }
+}
+
 // ─── Wishlist ────────────────────────────────────────────────────────────────
 
 function get_wishlist(string $status = '', int $user_id = 0): array {
