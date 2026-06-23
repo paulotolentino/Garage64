@@ -593,6 +593,24 @@ function upload_photo(array $file, int $miniature_id): ?string {
         return null;
     }
 
+    // Dimension guard (anti decompression-bomb): reject by resolution BEFORE
+    // handing the file to GD. A few-MB image can decode to a huge pixel matrix
+    // (e.g. 20000x20000 ≈ 1.6 GB) and exhaust memory. A miniatures catalog never
+    // needs more than these limits.
+    $max_width  = 8000;   // px
+    $max_height = 8000;   // px
+    $max_pixels = 50_000_000; // 50 megapixels
+    $dimensions = @getimagesize($file['tmp_name']);
+    if ($dimensions === false) {
+        return null; // unreadable / not a real raster image
+    }
+    [$img_w, $img_h] = $dimensions;
+    if ($img_w < 1 || $img_h < 1
+        || $img_w > $max_width || $img_h > $max_height
+        || ($img_w * $img_h) > $max_pixels) {
+        return null;
+    }
+
     $dir = UPLOADS_DIR . $miniature_id . '/';
     if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
         return null;
