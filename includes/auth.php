@@ -65,8 +65,10 @@ function login(string $username, string $password): bool|string {
     // Rate limiting: throttle brute force / credential stuffing by IP and by
     // username. Both buckets are checked *before* touching the database; a block
     // returns the same generic failure as a wrong password (no enumeration).
+    // The username is hashed (sha256) so the bucket length is fixed and can never
+    // overflow rate_limits.bucket VARCHAR(100), regardless of input size.
     $ip_bucket   = 'login:ip:' . client_ip();
-    $user_bucket = 'login:user:' . strtolower(trim($username));
+    $user_bucket = 'login:user:' . hash('sha256', strtolower(trim($username)));
     if (rate_limit_exceeded($ip_bucket, 10, 900)
         || rate_limit_exceeded($user_bucket, 5, 900)) {
         return false;
