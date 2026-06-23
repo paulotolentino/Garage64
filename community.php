@@ -3,6 +3,10 @@ require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
 
+// Beta fechado: o mural é exclusivo da comunidade. Visitantes anônimos são
+// redirecionados para o login antes de qualquer consulta ou processamento do feed.
+require_login();
+
 // Keyset pagination: ?before=YYYY-MM-DD HH:MM:SS (validated; used as a bound param).
 $before = null;
 if (isset($_GET['before'])) {
