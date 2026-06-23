@@ -34,8 +34,10 @@ $rating_msg = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['public_rating'])) {
     verify_csrf();
     $submitted = (int) $_POST['public_rating'];
-    // IP confiável: REMOTE_ADDR não é forjável pelo cliente (ao contrário de X-Forwarded-For).
-    $ip        = $_SERVER['REMOTE_ADDR'] ?? '';
+    // IP real do visitante via client_ip(): atrás da Cloudflare resolve o
+    // CF-Connecting-IP (validado contra os ranges oficiais); caso contrário cai
+    // em REMOTE_ADDR. Mesma fonte para rate limit e para o ip_hash/dedupe.
+    $ip        = client_ip();
     // Camada extra de rate limit (além de CSRF + dedupe por ip_hash): 20 / hora / IP.
     // Não substitui o dedupe nem altera ip_hash/média — apenas barra flood de POST.
     $rl_bucket = 'rating:ip:' . $ip;

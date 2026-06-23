@@ -213,9 +213,109 @@ function is_reserved_slug(string $slug): bool {
 // Single-row counter per bucket. The window resets atomically once it expires,
 // so the table stays tiny. No sessions, files or external cache involved.
 
-/** Resolve the caller IP (Cloudflare/proxy handling is intentionally out of scope). */
+// ─── Real client IP behind Cloudflare ────────────────────────────────────────
+// Official Cloudflare edge ranges (https://www.cloudflare.com/ips/). Bundled
+// statically — never fetched at runtime. Used to decide whether CF-Connecting-IP
+// can be trusted. Keep in sync if Cloudflare publishes new ranges.
+const CLOUDFLARE_IP_RANGES = [
+    // IPv4
+    '173.245.48.0/20',
+    '103.21.244.0/22',
+    '103.22.200.0/22',
+    '103.31.4.0/22',
+    '141.101.64.0/18',
+    '108.162.192.0/18',
+    '190.93.240.0/20',
+    '188.114.96.0/20',
+    '197.234.240.0/22',
+    '198.41.128.0/17',
+    '162.158.0.0/15',
+    '104.16.0.0/13',
+    '104.24.0.0/14',
+    '172.64.0.0/13',
+    '131.0.72.0/22',
+    // IPv6
+    '2400:cb00::/32',
+    '2606:4700::/32',
+    '2803:f800::/32',
+    '2405:b500::/32',
+    '2405:8100::/32',
+    '2a06:98c0::/29',
+    '2c0f:f248::/32',
+];
+
+/**
+ * Whether $ip (v4 or v6) falls inside $cidr. Returns false for malformed input
+ * or a v4/v6 family mismatch — i.e. fails safe (never a false "trusted").
+ */
+function ip_in_cidr(string $ip, string $cidr): bool {
+    if (strpos($cidr, '/') === false) {
+        return false;
+    }
+    [$subnet, $bits] = explode('/', $cidr, 2);
+    $bits = (int) $bits;
+
+    $ip_bin     = @inet_pton($ip);
+    $subnet_bin = @inet_pton($subnet);
+    if ($ip_bin === false || $subnet_bin === false) {
+        return false;
+    }
+    // Different address families (IPv4 vs IPv6) can never match.
+    if (strlen($ip_bin) !== strlen($subnet_bin)) {
+        return false;
+    }
+
+    $bytes = strlen($ip_bin);
+    if ($bits < 0 || $bits > $bytes * 8) {
+        return false;
+    }
+
+    $full_bytes = intdiv($bits, 8);
+    if ($full_bytes > 0 && substr($ip_bin, 0, $full_bytes) !== substr($subnet_bin, 0, $full_bytes)) {
+        return false;
+    }
+
+    $remaining = $bits % 8;
+    if ($remaining === 0) {
+        return true;
+    }
+    $mask    = ~((1 << (8 - $remaining)) - 1) & 0xFF;
+    return (ord($ip_bin[$full_bytes]) & $mask) === (ord($subnet_bin[$full_bytes]) & $mask);
+}
+
+/** Whether $ip belongs to any official Cloudflare edge range. */
+function is_cloudflare_ip(string $ip): bool {
+    if (filter_var($ip, FILTER_VALIDATE_IP) === false) {
+        return false;
+    }
+    foreach (CLOUDFLARE_IP_RANGES as $cidr) {
+        if (ip_in_cidr($ip, $cidr)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Resolve the real visitor IP.
+ *
+ * When the connection actually originates from a Cloudflare edge
+ * (REMOTE_ADDR ∈ Cloudflare ranges), trust CF-Connecting-IP — but only if it is
+ * a syntactically valid IP. In every other case fall back to REMOTE_ADDR. This
+ * prevents header spoofing: a forged CF-Connecting-IP from a non-Cloudflare peer
+ * is ignored. X-Forwarded-For is deliberately never consulted.
+ */
 function client_ip(): string {
-    return $_SERVER['REMOTE_ADDR'] ?? '';
+    $remote = $_SERVER['REMOTE_ADDR'] ?? '';
+
+    if ($remote !== '' && is_cloudflare_ip($remote)) {
+        $cf = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? '';
+        if ($cf !== '' && filter_var($cf, FILTER_VALIDATE_IP) !== false) {
+            return $cf;
+        }
+    }
+
+    return $remote;
 }
 
 /**
