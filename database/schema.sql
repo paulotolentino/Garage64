@@ -191,5 +191,11 @@ CREATE INDEX idx_photos_miniature_primary ON miniature_photos (miniature_id, is_
 CREATE INDEX idx_miniatures_created ON miniatures (created_at);
 CREATE INDEX idx_miniatures_manufacturer ON miniatures (manufacturer);
 CREATE INDEX idx_miniatures_scale ON miniatures (scale);
+-- Per-collector scoping: every list/count filters by user_id (admin garage,
+-- public collection, dashboard counts, export, stats).
+CREATE INDEX idx_miniatures_user ON miniatures (user_id);
+CREATE INDEX idx_categories_user ON categories (user_id);
+CREATE INDEX idx_tags_user ON tags (user_id);
+CREATE INDEX idx_wishlist_user ON wishlist (user_id);
 ALTER TABLE miniatures
 ADD FULLTEXT INDEX ft_miniatures_search (name, manufacturer, model);
