@@ -36,8 +36,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['public_rating'])) {
     $submitted = (int) $_POST['public_rating'];
     // IP confiável: REMOTE_ADDR não é forjável pelo cliente (ao contrário de X-Forwarded-For).
     $ip        = $_SERVER['REMOTE_ADDR'] ?? '';
+    // Camada extra de rate limit (além de CSRF + dedupe por ip_hash): 20 / hora / IP.
+    // Não substitui o dedupe nem altera ip_hash/média — apenas barra flood de POST.
+    $rl_bucket = 'rating:ip:' . $ip;
+    if (rate_limit_exceeded($rl_bucket, 20, 3600)) {
+        header('Location: ' . mini_url($miniature) . '?rl=rating#rating');
+        exit;
+    }
     if (submit_public_rating($id, $submitted, $ip)) {
         $rating_msg = 'ok';
+        rate_limit_hit($rl_bucket, 3600);
     }
     header('Location: ' . mini_url($miniature) . '#rating');
     exit;
@@ -48,8 +56,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['comment_action'])) {
     verify_csrf();
     $action = (string) $_POST['comment_action'];
     if ($action === 'create' && is_logged_in()) {
+        // Rate limit por usuário: 10 comentários (raiz + resposta) / 5 min.
+        // Bloqueia ANTES de create_miniature_comment(), evitando comentário,
+        // resposta, menção e qualquer notificação quando o limite é atingido.
+        $rl_bucket = 'comment:user:' . current_user_id();
+        if (rate_limit_exceeded($rl_bucket, 10, 300)) {
+            header('Location: ' . mini_url($miniature) . '?rl=comment#comments');
+            exit;
+        }
         $parent_id = (int) ($_POST['comment_parent_id'] ?? 0) ?: null;
-        create_miniature_comment($id, current_user_id(), (string) ($_POST['comment_body'] ?? ''), $parent_id);
+        if (create_miniature_comment($id, current_user_id(), (string) ($_POST['comment_body'] ?? ''), $parent_id)) {
+            rate_limit_hit($rl_bucket, 300);
+        }
     } elseif ($action === 'pin') {
         toggle_miniature_comment_pin((int) ($_POST['comment_id'] ?? 0), current_user_id());
     } elseif ($action === 'delete') {
@@ -337,6 +355,9 @@ require_once __DIR__ . '/includes/header_public.php';
         <?php else: ?>
             <div class="md-rating-empty">Ainda sem avaliações — seja o primeiro.</div>
         <?php endif; ?>
+        <?php if (($_GET['rl'] ?? '') === 'rating'): ?>
+            <div class="md-rating-empty" role="alert">Muitas avaliações enviadas recentemente. Tente novamente mais tarde.</div>
+        <?php endif; ?>
         <form method="post" action="<?= e(mini_url($miniature)) ?>#rating" class="md-rating-form">
             <?= csrf_field() ?>
             <span class="md-rating-label">Sua nota:</span>
@@ -360,6 +381,13 @@ foreach ($comments as $cRoot) { $comments_total += 1 + count($cRoot['replies']);
 ?>
 <section class="md-section" id="comments">
     <h2 class="md-section-title">Comentários<?= $comments_total ? ' <span class="cm-counter">' . $comments_total . '</span>' : '' ?></h2>
+
+    <?php if (($_GET['rl'] ?? '') === 'comment'): ?>
+        <div class="cm-login-cta" role="alert">
+            <i class="fa fa-clock"></i>
+            <span>Você está comentando muito rápido. Tente novamente em alguns minutos.</span>
+        </div>
+    <?php endif; ?>
 
     <?php if (is_logged_in()): ?>
         <form method="post" action="<?= e(mini_url($miniature)) ?>#comments" class="cm-form">
