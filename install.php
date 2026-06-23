@@ -13,6 +13,12 @@
 
 declare(strict_types=1);
 
+// Reaproveita o bootstrap central só para herdar a MESMA política de erros
+// (display_errors/log_errors via APP_DEBUG) e o helper is_https() usado no
+// hardening do cookie de sessão abaixo. Não usa as constantes de DB daqui — o
+// instalador trabalha apenas com os valores do formulário.
+require_once __DIR__ . '/includes/config.php';
+
 $lock_file   = __DIR__ . '/installed.lock';
 $schema_file = __DIR__ . '/database/schema.sql';
 $config_file = __DIR__ . '/includes/config.local.php';
@@ -39,6 +45,15 @@ if (file_exists($lock_file)) {
 // ─── Session / CSRF ──────────────────────────────────────────────────────────
 
 session_name('garage64_installer');
+// Hardening: mesma política de cookie do restante da aplicação. Secure só sob
+// HTTPS (via is_https()) para não quebrar a instalação local em HTTP.
+session_set_cookie_params([
+    'lifetime' => 0,
+    'path'     => '/',
+    'secure'   => is_https(),
+    'httponly' => true,
+    'samesite' => 'Lax',
+]);
 session_start();
 
 if (empty($_SESSION['inst_csrf'])) {
