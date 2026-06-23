@@ -224,13 +224,19 @@ function client_ip(): string {
  */
 function rate_limit_exceeded(string $bucket, int $max, int $window): bool {
     require_once __DIR__ . '/db.php';
-    $stmt = db()->prepare(
-        'SELECT hits FROM rate_limits
-         WHERE bucket = ? AND window_start >= (NOW() - INTERVAL ? SECOND)'
-    );
-    $stmt->execute([$bucket, $window]);
-    $hits = $stmt->fetchColumn();
-    return $hits !== false && (int) $hits >= $max;
+    // Fail open: if the rate_limits table doesn't exist yet (migration not run
+    // via /admin/manutencao), never block — otherwise login would deadlock.
+    try {
+        $stmt = db()->prepare(
+            'SELECT hits FROM rate_limits
+             WHERE bucket = ? AND window_start >= (NOW() - INTERVAL ? SECOND)'
+        );
+        $stmt->execute([$bucket, $window]);
+        $hits = $stmt->fetchColumn();
+        return $hits !== false && (int) $hits >= $max;
+    } catch (Throwable $e) {
+        return false;
+    }
 }
 
 /**
@@ -239,13 +245,19 @@ function rate_limit_exceeded(string $bucket, int $max, int $window): bool {
  */
 function rate_limit_hit(string $bucket, int $window): void {
     require_once __DIR__ . '/db.php';
-    db()->prepare(
-        'INSERT INTO rate_limits (bucket, hits, window_start)
-         VALUES (?, 1, NOW())
-         ON DUPLICATE KEY UPDATE
-            hits = IF(window_start < (NOW() - INTERVAL ? SECOND), 1, hits + 1),
-            window_start = IF(window_start < (NOW() - INTERVAL ? SECOND), NOW(), window_start)'
-    )->execute([$bucket, $window, $window]);
+    // Best-effort: silently no-op if the rate_limits table doesn't exist yet
+    // (migration not run). The counter simply isn't recorded until then.
+    try {
+        db()->prepare(
+            'INSERT INTO rate_limits (bucket, hits, window_start)
+             VALUES (?, 1, NOW())
+             ON DUPLICATE KEY UPDATE
+                hits = IF(window_start < (NOW() - INTERVAL ? SECOND), 1, hits + 1),
+                window_start = IF(window_start < (NOW() - INTERVAL ? SECOND), NOW(), window_start)'
+        )->execute([$bucket, $window, $window]);
+    } catch (Throwable $e) {
+        return;
+    }
 
     // Opportunistic cleanup (no cron): ~1% of writes purge rows untouched for a day.
     if (random_int(1, 100) === 1) {
