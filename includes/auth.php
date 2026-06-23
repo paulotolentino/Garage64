@@ -4,6 +4,16 @@ require_once __DIR__ . '/config.php';
 function session_start_once(): void {
     if (session_status() === PHP_SESSION_NONE) {
         session_name(SESSION_NAME);
+        // Harden the session cookie (M1): block JS access (httponly), limit
+        // cross-site sending (SameSite=Lax) and only allow HTTPS-only transport
+        // when the request is actually served over TLS (keeps local HTTP working).
+        session_set_cookie_params([
+            'lifetime' => 0,
+            'path'     => '/',
+            'secure'   => is_https(),
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
         session_start();
     }
 }

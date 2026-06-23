@@ -72,3 +72,50 @@ if (!defined('PER_PAGE')) {
 if (!defined('OG_DEFAULT_IMAGE')) {
     define('OG_DEFAULT_IMAGE', '');
 }
+
+// ─── HTTPS detection ─────────────────────────────────────────────────────────
+// Central helper reused by the session cookie hardening (secure flag) and the
+// environment detection below. Conservative: only reports HTTPS when the
+// request is actually served over TLS (directly or via a TLS-terminating proxy).
+if (!function_exists('is_https')) {
+    function is_https(): bool {
+        if (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off') {
+            return true;
+        }
+        if ((int) ($_SERVER['SERVER_PORT'] ?? 0) === 443) {
+            return true;
+        }
+        // Behind a reverse proxy / load balancer that terminates TLS.
+        if (strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https') {
+            return true;
+        }
+        return false;
+    }
+}
+
+// ─── Environment + error policy (M2) ─────────────────────────────────────────
+// APP_DEBUG controls whether errors are shown on screen. It can be forced in
+// config.local.php (e.g. define('APP_DEBUG', true);). When unset, it is
+// auto-detected: ON for local hosts and CLI, OFF for real domains (production).
+if (!defined('APP_DEBUG')) {
+    $g64_host  = strtolower(explode(':', (string) ($_SERVER['HTTP_HOST'] ?? ''))[0]);
+    $g64_local = $g64_host === ''                       // CLI (e.g. php -l)
+        || $g64_host === 'localhost'
+        || $g64_host === '127.0.0.1'
+        || $g64_host === '::1'
+        || str_ends_with($g64_host, '.local')
+        || str_ends_with($g64_host, '.test');
+    define('APP_DEBUG', $g64_local);
+}
+
+// Always log errors; only display them in debug/local environments. In
+// production this prevents leaking paths, SQL and stack traces to end users.
+ini_set('log_errors', '1');
+error_reporting(E_ALL);
+if (APP_DEBUG) {
+    ini_set('display_errors', '1');
+    ini_set('display_startup_errors', '1');
+} else {
+    ini_set('display_errors', '0');
+    ini_set('display_startup_errors', '0');
+}
