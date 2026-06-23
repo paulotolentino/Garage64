@@ -32,8 +32,10 @@ try {
 // ─── Public rating (POST) ─────────────────────────────────────────────────────
 $rating_msg = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['public_rating'])) {
+    verify_csrf();
     $submitted = (int) $_POST['public_rating'];
-    $ip        = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
+    // IP confiável: REMOTE_ADDR não é forjável pelo cliente (ao contrário de X-Forwarded-For).
+    $ip        = $_SERVER['REMOTE_ADDR'] ?? '';
     if (submit_public_rating($id, $submitted, $ip)) {
         $rating_msg = 'ok';
     }
@@ -336,6 +338,7 @@ require_once __DIR__ . '/includes/header_public.php';
             <div class="md-rating-empty">Ainda sem avaliações — seja o primeiro.</div>
         <?php endif; ?>
         <form method="post" action="<?= e(mini_url($miniature)) ?>#rating" class="md-rating-form">
+            <?= csrf_field() ?>
             <span class="md-rating-label">Sua nota:</span>
             <div class="star-picker d-flex gap-1">
                 <?php for ($s = 1; $s <= 5; $s++): ?>
