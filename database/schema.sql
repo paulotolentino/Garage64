@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS miniatures (
     scale VARCHAR(20) DEFAULT NULL,
     year SMALLINT UNSIGNED DEFAULT NULL,
     category_id INT UNSIGNED DEFAULT NULL,
-    condition ENUM('sealed', 'open', 'no_box') NOT NULL DEFAULT 'sealed',
+    `condition` ENUM('sealed', 'open', 'no_box') NOT NULL DEFAULT 'sealed',
     location ENUM('display', 'storage') NOT NULL DEFAULT 'storage',
     public_description TEXT DEFAULT NULL,
     private_story TEXT DEFAULT NULL,
@@ -189,11 +189,7 @@ VALUES ('JDM'),
 CREATE INDEX idx_photos_miniature_primary ON miniature_photos (miniature_id, is_primary);
 -- miniatures: columns used in filters and ORDER BY
 CREATE INDEX idx_miniatures_created ON miniatures (created_at);
-CREATE INDEX idx_miniatures_status ON miniatures (status);
 CREATE INDEX idx_miniatures_manufacturer ON miniatures (manufacturer);
 CREATE INDEX idx_miniatures_scale ON miniatures (scale);
 ALTER TABLE miniatures
 ADD FULLTEXT INDEX ft_miniatures_search (name, manufacturer, model);
-ALTER TABLE miniatures
-ADD COLUMN is_public TINYINT(1) NOT NULL DEFAULT 1
-AFTER emotional_rating;
