@@ -226,7 +226,7 @@ require_once __DIR__ . '/../includes/header_admin.php';
         <?php else: ?>
         <div class="dash-empty">
             <i class="fa fa-car-side"></i>
-            <p>Nenhuma miniatura ainda. <a href="/admin/miniatures?action=add">Adicione a primeira</a>.</p>
+            <p>Nenhuma miniatura estacionada ainda. <a href="/admin/miniatures?action=add">Adicione a primeira</a> e veja sua garagem ganhar vida.</p>
         </div>
         <?php endif; ?>
     </div>
@@ -257,7 +257,7 @@ require_once __DIR__ . '/../includes/header_admin.php';
             <?php else: ?>
                 <div class="dash-empty dash-empty-sm">
                     <i class="fa fa-bell-slash"></i>
-                    <p>Sem atividade recente.</p>
+                    <p>Tudo tranquilo na garagem. As interações com suas peças aparecem aqui.</p>
                 </div>
             <?php endif; ?>
         </div>
