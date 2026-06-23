@@ -61,13 +61,29 @@ function require_superadmin(): void {
 /** Returns true on success, 'banned' if user is banned, false on bad credentials. */
 function login(string $username, string $password): bool|string {
     require_once __DIR__ . '/db.php';
+
+    // Rate limiting: throttle brute force / credential stuffing by IP and by
+    // username. Both buckets are checked *before* touching the database; a block
+    // returns the same generic failure as a wrong password (no enumeration).
+    $ip_bucket   = 'login:ip:' . client_ip();
+    $user_bucket = 'login:user:' . strtolower(trim($username));
+    if (rate_limit_exceeded($ip_bucket, 10, 900)
+        || rate_limit_exceeded($user_bucket, 5, 900)) {
+        return false;
+    }
+
     // Use SELECT * so login works even before multi-user migration columns exist
     $stmt = db()->prepare(
         'SELECT * FROM admin_users WHERE username = ? LIMIT 1'
     );
     $stmt->execute([$username]);
     $user = $stmt->fetch();
-    if (!$user || !password_verify($password, $user['password_hash'])) return false;
+    if (!$user || !password_verify($password, $user['password_hash'])) {
+        // Count only failures, against both buckets.
+        rate_limit_hit($ip_bucket, 900);
+        rate_limit_hit($user_bucket, 900);
+        return false;
+    }
     if (!empty($user['is_banned'])) return 'banned';
     session_start_once();
     session_regenerate_id(true);
@@ -82,6 +98,14 @@ function login(string $username, string $password): bool|string {
 /** Returns true on success or an error string. */
 function register_user(string $username, string $email, string $password, string $display_name = ''): bool|string {
     require_once __DIR__ . '/db.php';
+
+    // Rate limiting: cap account creation per IP (mass-signup / bot protection).
+    // Checked first so a blocked client never reaches the database probes below.
+    $reg_bucket = 'register:ip:' . client_ip();
+    if (rate_limit_exceeded($reg_bucket, 3, 3600)) {
+        return 'Não foi possível concluir o cadastro agora. Tente novamente mais tarde.';
+    }
+
     $username     = trim($username);
     $email        = strtolower(trim($email));
     $display_name = trim($display_name) ?: $username;
@@ -97,15 +121,36 @@ function register_user(string $username, string $email, string $password, string
 
     $slug = strtolower(preg_replace('/[^a-z0-9_-]/i', '-', $username));
 
-    $chk = db()->prepare('SELECT id FROM admin_users WHERE username = ? OR email = ? OR slug = ? LIMIT 1');
-    $chk->execute([$username, $email, $slug]);
-    if ($chk->fetch()) return 'Usuário ou e-mail já cadastrado.';
+    // Block reserved routes/handles. Reuse the public "username taken" message so
+    // we never disclose that a name is internally reserved.
+    if (is_reserved_slug($slug) || is_reserved_slug($username)) {
+        return 'Este nome de usuário já está em uso. Escolha outro.';
+    }
+
+    // Username/slug are PUBLIC handles (shown at /u/{slug}); revealing a clash is
+    // not a privacy leak and keeps registration UX clear.
+    $chk_user = db()->prepare('SELECT id FROM admin_users WHERE username = ? OR slug = ? LIMIT 1');
+    $chk_user->execute([$username, $slug]);
+    if ($chk_user->fetch()) {
+        return 'Este nome de usuário já está em uso. Escolha outro.';
+    }
+
+    // E-mail is PRIVATE: never confirm whether an address exists. Return a generic
+    // message (distinct from a thrown exception) to avoid user/e-mail enumeration.
+    $chk_email = db()->prepare('SELECT id FROM admin_users WHERE email = ? LIMIT 1');
+    $chk_email->execute([$email]);
+    if ($chk_email->fetch()) {
+        return 'Não foi possível concluir o cadastro. Verifique os dados e tente novamente.';
+    }
 
     $hash = password_hash($password, PASSWORD_BCRYPT);
     db()->prepare(
         'INSERT INTO admin_users (username, slug, display_name, email, password_hash, is_superadmin, is_banned)
          VALUES (?, ?, ?, ?, ?, 0, 0)'
     )->execute([$username, $slug, $display_name, $email, $hash]);
+
+    // Count only successful account creations against the per-IP budget.
+    rate_limit_hit($reg_bucket, 3600);
     return true;
 }
 
@@ -140,6 +185,71 @@ function verify_csrf(): void {
     if (!isset($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
         http_response_code(403);
         exit('Invalid CSRF token.');
+    }
+}
+
+// ─── Reserved slugs ──────────────────────────────────────────────────────────
+// Centralized so registration, the admin slug editor and the profile editor all
+// share the same blocklist. Anything that collides with a public/admin route or
+// a physical directory must never become a /u/{slug} handle.
+function reserved_slugs(): array {
+    return [
+        '404', 'admin', 'api', 'assets', 'categories', 'collection', 'collections',
+        'community', 'css', 'dashboard', 'database', 'export', 'follow', 'follows',
+        'img', 'includes', 'index', 'install', 'js', 'login', 'logout', 'manutencao',
+        'migrate_webp', 'mini', 'miniature', 'notifications', 'profile', 'register',
+        'robots', 'setup', 'sitemap', 'static', 'tags', 'u', 'uploads', 'users',
+        'wishlist',
+    ];
+}
+
+function is_reserved_slug(string $slug): bool {
+    return in_array(strtolower(trim($slug)), reserved_slugs(), true);
+}
+
+// ─── Rate limiting (fixed-window, DB-backed) ─────────────────────────────────
+// Single-row counter per bucket. The window resets atomically once it expires,
+// so the table stays tiny. No sessions, files or external cache involved.
+
+/** Resolve the caller IP (Cloudflare/proxy handling is intentionally out of scope). */
+function client_ip(): string {
+    return $_SERVER['REMOTE_ADDR'] ?? '';
+}
+
+/**
+ * Whether $bucket has already reached $max hits inside the current $window
+ * (in seconds). Read-only — does not increment. Expired windows count as zero.
+ */
+function rate_limit_exceeded(string $bucket, int $max, int $window): bool {
+    require_once __DIR__ . '/db.php';
+    $stmt = db()->prepare(
+        'SELECT hits FROM rate_limits
+         WHERE bucket = ? AND window_start >= (NOW() - INTERVAL ? SECOND)'
+    );
+    $stmt->execute([$bucket, $window]);
+    $hits = $stmt->fetchColumn();
+    return $hits !== false && (int) $hits >= $max;
+}
+
+/**
+ * Record one hit against $bucket. Resets the counter when the previous window
+ * has expired, otherwise increments it atomically (single UPSERT).
+ */
+function rate_limit_hit(string $bucket, int $window): void {
+    require_once __DIR__ . '/db.php';
+    db()->prepare(
+        'INSERT INTO rate_limits (bucket, hits, window_start)
+         VALUES (?, 1, NOW())
+         ON DUPLICATE KEY UPDATE
+            hits = IF(window_start < (NOW() - INTERVAL ? SECOND), 1, hits + 1),
+            window_start = IF(window_start < (NOW() - INTERVAL ? SECOND), NOW(), window_start)'
+    )->execute([$bucket, $window, $window]);
+
+    // Opportunistic cleanup (no cron): ~1% of writes purge rows untouched for a day.
+    if (random_int(1, 100) === 1) {
+        try {
+            db()->exec('DELETE FROM rate_limits WHERE updated_at < (NOW() - INTERVAL 1 DAY)');
+        } catch (Throwable $e) { /* best-effort */ }
     }
 }
 

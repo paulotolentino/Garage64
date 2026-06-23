@@ -157,6 +157,16 @@ CREATE TABLE IF NOT EXISTS user_follows (
     FOREIGN KEY (follower_id) REFERENCES admin_users(id) ON DELETE CASCADE,
     FOREIGN KEY (following_id) REFERENCES admin_users(id) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+-- Fixed-window rate limiting (brute force / mass-signup protection).
+-- One row per bucket (e.g. 'login:ip:1.2.3.4', 'login:user:joe', 'register:ip:1.2.3.4').
+-- Counter resets when the window expires; old rows are purged opportunistically.
+CREATE TABLE IF NOT EXISTS rate_limits (
+    bucket VARCHAR(100) NOT NULL PRIMARY KEY,
+    hits INT UNSIGNED NOT NULL DEFAULT 0,
+    window_start TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_rate_limits_updated (updated_at)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 -- Default data
 INSERT IGNORE INTO categories (name)
 VALUES ('Muscle Cars'),

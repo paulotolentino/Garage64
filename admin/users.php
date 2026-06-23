@@ -5,8 +5,6 @@ require_once __DIR__ . '/../includes/functions.php';
 
 require_superadmin();
 
-$RESERVED_SLUGS = ['admin','register','login','logout','install','setup','sitemap','robots','mini','u','collections','assets','uploads','database','includes','api'];
-
 // ─── POST ACTIONS ─────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
@@ -17,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'edit_slug') {
         $new_slug = strtolower(trim($_POST['slug'] ?? ''));
-        if (!preg_match('/^[a-z0-9_-]{2,30}$/', $new_slug) || in_array($new_slug, $RESERVED_SLUGS)) {
+        if (!preg_match('/^[a-z0-9_-]{2,30}$/', $new_slug) || is_reserved_slug($new_slug)) {
             flash('Slug inválido ou reservado.', 'danger');
         } else {
             $chk = db()->prepare('SELECT id FROM admin_users WHERE slug = ? AND id != ?');

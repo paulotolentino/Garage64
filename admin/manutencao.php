@@ -213,6 +213,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
             FOREIGN KEY (follower_id) REFERENCES admin_users(id) ON DELETE CASCADE,
             FOREIGN KEY (following_id) REFERENCES admin_users(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'rate_limits' => "CREATE TABLE rate_limits (
+            bucket VARCHAR(100) NOT NULL PRIMARY KEY,
+            hits INT UNSIGNED NOT NULL DEFAULT 0,
+            window_start TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            KEY idx_rate_limits_updated (updated_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     ];
     $check_table = db()->prepare(
         "SELECT COUNT(*) FROM information_schema.tables

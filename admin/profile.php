@@ -25,8 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $confirm_pass = $_POST['confirm_password'] ?? '';
 
     // ─── Slug validation ──────────────────────────────────────────────────────
-    $RESERVED_SLUGS = ['admin','register','login','logout','install','setup','sitemap','robots','mini','u','collections','assets','uploads','database','includes','api'];
-    if (!preg_match('/^[a-z0-9_-]{2,30}$/', $new_slug) || in_array($new_slug, $RESERVED_SLUGS)) {
+    if (!preg_match('/^[a-z0-9_-]{2,30}$/', $new_slug) || is_reserved_slug($new_slug)) {
         $error = 'Slug inválido (2–30 chars: letras minúsculas, números, _ e -) ou reservado.';
     } else {
         $chk = db()->prepare('SELECT id FROM admin_users WHERE slug = ? AND id != ?');
