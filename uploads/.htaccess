@@ -1,6 +1,23 @@
 Options -Indexes
 Require all granted
 
+# ── Hardening: impede execução de scripts dentro de /uploads ────────────────
+# Defesa em profundidade. Imagens (jpg/png/gif/webp) seguem servidas normalmente;
+# qualquer arquivo com extensão executável é negado (403) antes de ser
+# interpretado — funciona tanto sob PHP-FPM quanto mod_php (Apache 2.4 authz,
+# mesmo padrão do .htaccess raiz).
+<FilesMatch "\.(php|phtml|php3|php4|php5|php7|phps|pht|phar|cgi|pl|py|asp|aspx|jsp|sh)$">
+    Require all denied
+</FilesMatch>
+
+# Camada extra: desliga o motor PHP quando mod_php está presente (inócuo sob FPM).
+<IfModule mod_php7.c>
+    php_admin_flag engine off
+</IfModule>
+<IfModule mod_php8.c>
+    php_admin_flag engine off
+</IfModule>
+
 # Disable caching so rotated/replaced images show immediately
 <IfModule mod_headers.c>
     Header set Cache-Control "no-cache, must-revalidate"
