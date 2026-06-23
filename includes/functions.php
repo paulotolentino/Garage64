@@ -220,6 +220,17 @@ function get_miniature(int $id, ?int $viewer_id = null): ?array {
     return $stmt->fetch() ?: null;
 }
 
+/**
+ * Ownership guard: true only when the miniature exists AND belongs to $user_id.
+ * Used by the admin CRUD to enforce per-collector isolation (no cross-user access).
+ */
+function user_owns_miniature(int $miniature_id, int $user_id): bool {
+    if ($miniature_id <= 0 || $user_id <= 0) return false;
+    $stmt = db()->prepare('SELECT 1 FROM miniatures WHERE id = ? AND user_id = ? LIMIT 1');
+    $stmt->execute([$miniature_id, $user_id]);
+    return (bool) $stmt->fetchColumn();
+}
+
 /** Adds a like (idempotent — UNIQUE constraint prevents duplicates). */
 function like_miniature(int $miniature_id, int $user_id): void {
     db()->prepare(

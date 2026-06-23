@@ -16,6 +16,11 @@ if ($action === 'rotate_photo' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $degrees      = (int) ($_POST['degrees']       ?? 90);
     if (!in_array($degrees, [90, 180, 270], true)) $degrees = 90;
 
+    // Propriedade: a miniatura precisa pertencer ao usuário logado.
+    if (!user_owns_miniature($miniature_id, current_user_id())) {
+        echo json_encode(['ok' => false, 'error' => 'não autorizado']); exit;
+    }
+
     $stmt = db()->prepare('SELECT file_path FROM miniature_photos WHERE id = ? AND miniature_id = ?');
     $stmt->execute([$photo_id, $miniature_id]);
     $photo = $stmt->fetch();
@@ -45,7 +50,8 @@ if ($action === 'reorder_photos' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Content-Type: application/json');
     $miniature_id = (int) ($_POST['miniature_id'] ?? 0);
     $photo_ids    = array_filter(array_map('intval', $_POST['photo_ids'] ?? []));
-    if ($miniature_id && $photo_ids) {
+    // Propriedade: só reordena fotos de miniatura do próprio usuário.
+    if ($miniature_id && $photo_ids && user_owns_miniature($miniature_id, current_user_id())) {
         $stmt = db()->prepare(
             'UPDATE miniature_photos SET sort_order = ? WHERE id = ? AND miniature_id = ?'
         );
@@ -61,13 +67,15 @@ if ($action === 'reorder_photos' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 if ($action === 'toggle_featured' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
     header('Content-Type: application/json');
-    $id = (int) ($_POST['id'] ?? 0);
-    $stmt = db()->prepare('SELECT is_featured FROM miniatures WHERE id = ?');
-    $stmt->execute([$id]);
+    $id  = (int) ($_POST['id'] ?? 0);
+    $uid = current_user_id();
+    // Propriedade: só consulta/altera destaque de miniatura do próprio usuário.
+    $stmt = db()->prepare('SELECT is_featured FROM miniatures WHERE id = ? AND user_id = ?');
+    $stmt->execute([$id, $uid]);
     $mini = $stmt->fetch();
     if (!$mini) { echo json_encode(['ok' => false]); exit; }
     $new = $mini['is_featured'] ? 0 : 1;
-    db()->prepare('UPDATE miniatures SET is_featured = ? WHERE id = ?')->execute([$new, $id]);
+    db()->prepare('UPDATE miniatures SET is_featured = ? WHERE id = ? AND user_id = ?')->execute([$new, $id, $uid]);
     echo json_encode(['ok' => true, 'is_featured' => $new]);
     exit;
 }
@@ -77,6 +85,15 @@ if ($action === 'bulk' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
     $ids        = array_filter(array_map('intval', $_POST['ids'] ?? []));
     $bulk_action = $_POST['bulk_action'] ?? '';
+    // Propriedade: restringe aos ids que realmente pertencem ao usuário logado.
+    // Ids de outros usuários enviados no POST são silenciosamente descartados.
+    if ($ids) {
+        $uid = current_user_id();
+        $own_ph = implode(',', array_fill(0, count($ids), '?'));
+        $own    = db()->prepare("SELECT id FROM miniatures WHERE id IN ($own_ph) AND user_id = ?");
+        $own->execute(array_merge($ids, [$uid]));
+        $ids = array_map('intval', $own->fetchAll(PDO::FETCH_COLUMN));
+    }
     if ($ids) {
         $placeholders = implode(',', array_fill(0, count($ids), '?'));
         match ($bulk_action) {
@@ -97,9 +114,15 @@ if ($action === 'bulk' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     redirect('/admin/miniatures?page=' . $return_page);
 }
 
-// ─── DELETE ──────────────────────────────────────────────────────────────────
-if ($action === 'delete' && isset($_GET['id'])) {
-    $id = (int) $_GET['id'];
+// ─── DELETE (POST + CSRF + dono) ─────────────────────────────────────────────
+// Exclusão destrutiva: nunca via GET. Exige POST + token CSRF + propriedade.
+if ($action === 'delete' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
+    $id = (int) ($_POST['id'] ?? 0);
+    if (!user_owns_miniature($id, current_user_id())) {
+        flash('Miniatura não encontrada.', 'danger');
+        redirect('/admin/miniatures');
+    }
     $photos = get_miniature_photos($id);
     foreach ($photos as $p) {
         $path = UPLOADS_DIR . $p['file_path'];
@@ -111,7 +134,7 @@ if ($action === 'delete' && isset($_GET['id'])) {
     if (is_dir($dir)) {
         @rmdir($dir);
     }
-    db()->prepare('DELETE FROM miniatures WHERE id = ?')->execute([$id]);
+    db()->prepare('DELETE FROM miniatures WHERE id = ? AND user_id = ?')->execute([$id, current_user_id()]);
     flash('Miniatura removida com sucesso.');
     redirect('/admin/miniatures');
 }
@@ -150,10 +173,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($id) {
-        // Update — backtick column names to avoid reserved-word conflicts (e.g. `condition`)
-        $sets = implode(', ', array_map(fn($k) => "`$k` = :$k", array_keys($data)));
-        $data['id'] = $id;
-        db()->prepare("UPDATE miniatures SET $sets WHERE id = :id")->execute($data);
+        // Propriedade: só o dono edita. Aborta sem vazar dados de terceiros.
+        if (!user_owns_miniature($id, current_user_id())) {
+            flash('Miniatura não encontrada.', 'danger');
+            redirect('/admin/miniatures');
+        }
+        // Update — nunca transfere posse: remove user_id do SET e fixa o dono no WHERE.
+        $update_data = $data;
+        unset($update_data['user_id']);
+        $sets = implode(', ', array_map(fn($k) => "`$k` = :$k", array_keys($update_data)));
+        $update_data['id']  = $id;
+        $update_data['uid'] = current_user_id();
+        db()->prepare("UPDATE miniatures SET $sets WHERE id = :id AND user_id = :uid")->execute($update_data);
         $miniature_id = $id;
         flash('Miniatura atualizada com sucesso.');
     } else {
@@ -244,10 +275,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ─── VIEW (detail) ───────────────────────────────────────────────────────────
 if ($action === 'view') {
     $view_id      = (int) ($_GET['id'] ?? 0);
-    $view_mini    = $view_id ? get_miniature($view_id) : null;
-    $view_photos  = $view_id ? get_miniature_photos($view_id) : [];
-    $view_tags    = $view_id ? get_miniature_tags($view_id) : [];
-    if (!$view_mini) { flash('Miniatura não encontrada.', 'danger'); redirect('/admin/miniatures'); }
+    // Propriedade: o detalhe administrativo expõe campos privados — só o dono vê.
+    if (!$view_id || !user_owns_miniature($view_id, current_user_id())) {
+        flash('Miniatura não encontrada.', 'danger');
+        redirect('/admin/miniatures');
+    }
+    $view_mini    = get_miniature($view_id);
+    $view_photos  = get_miniature_photos($view_id);
+    $view_tags    = get_miniature_tags($view_id);
 }
 
 // ─── LIST ────────────────────────────────────────────────────────────────────
@@ -321,9 +356,15 @@ $edit_photos = [];
 $edit_tags   = [];
 
 if ($action === 'edit' && isset($_GET['id'])) {
-    $editing     = get_miniature((int) $_GET['id']);
-    $edit_photos = get_miniature_photos((int) $_GET['id']);
-    $edit_tags   = array_column(get_miniature_tags((int) $_GET['id']), 'id');
+    $edit_id = (int) $_GET['id'];
+    // Propriedade: nunca carregar (nem exibir campos privados de) miniatura alheia.
+    if (!user_owns_miniature($edit_id, current_user_id())) {
+        flash('Miniatura não encontrada.', 'danger');
+        redirect('/admin/miniatures');
+    }
+    $editing     = get_miniature($edit_id);
+    $edit_photos = get_miniature_photos($edit_id);
+    $edit_tags   = array_column(get_miniature_tags($edit_id), 'id');
 }
 
 $page_title = $action === 'list' ? 'Miniaturas' : ($editing ? 'Editar Miniatura' : 'Nova Miniatura');
@@ -392,8 +433,13 @@ $render_item = function (array $m) use ($admin_page) {
             <a href="<?= $edit_url ?>" class="admin-miniatures-act" title="Editar"><i class="fa fa-pen"></i></a>
             <a href="<?= $edit_url ?>#fotos" class="admin-miniatures-act" title="Gerenciar fotos"><i class="fa fa-images"></i></a>
             <a href="<?= e(mini_url($m)) ?>" target="_blank" class="admin-miniatures-act" title="Ver página pública"><i class="fa fa-up-right-from-square"></i></a>
-            <a href="/admin/miniatures?action=delete&id=<?= $m['id'] ?>" class="admin-miniatures-act admin-miniatures-act-danger"
-               title="Excluir" onclick="return confirm('Remover esta miniatura?')"><i class="fa fa-trash"></i></a>
+            <form method="post" action="/admin/miniatures?action=delete" style="display:contents"
+                  onsubmit="return confirm('Remover esta miniatura?')">
+                <?= csrf_field() ?>
+                <input type="hidden" name="id" value="<?= (int) $m['id'] ?>">
+                <button type="submit" class="admin-miniatures-act admin-miniatures-act-danger"
+                        title="Excluir"><i class="fa fa-trash"></i></button>
+            </form>
         </div>
     </article>
     <?php
