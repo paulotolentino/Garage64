@@ -188,7 +188,8 @@ function get_miniatures(array $filters = []): array {
             [$where, $params] = _miniatures_where($filters, $ft);
             $sql = 'SELECT m.*, c.name AS category_name,
                            p.file_path AS primary_photo,
-                           (SELECT COUNT(*) FROM miniature_photos WHERE miniature_id = m.id) AS photo_count
+                           (SELECT COUNT(*) FROM miniature_photos WHERE miniature_id = m.id) AS photo_count,
+                           (SELECT COUNT(*) FROM miniature_likes WHERE miniature_id = m.id) AS likes_count
                     FROM miniatures m
                     LEFT JOIN categories c ON m.category_id = c.id
                     LEFT JOIN miniature_photos p ON p.miniature_id = m.id AND p.is_primary = 1

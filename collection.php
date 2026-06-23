@@ -352,6 +352,9 @@ require_once __DIR__ . '/includes/header_public.php';
                         <?php if ((int) $mini['photo_count'] > 1): ?>
                             <span class="cp-card-photos"><i class="fa fa-images"></i><?= (int) $mini['photo_count'] ?></span>
                         <?php endif; ?>
+                        <?php if ((int) ($mini['likes_count'] ?? 0) > 0): ?>
+                            <span class="cp-card-likes" title="Curtidas"><i class="fa fa-heart"></i><?= (int) $mini['likes_count'] ?></span>
+                        <?php endif; ?>
                     </div>
                     <div class="cp-card-info">
                         <?php if ($mini['manufacturer']): ?>

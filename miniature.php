@@ -544,6 +544,9 @@ foreach ($comments as $cRoot) { $comments_total += 1 + count($cRoot['replies']);
                         <?php if (!empty($rm['is_featured'])): ?>
                             <span class="cp-card-star"><i class="fa fa-star"></i></span>
                         <?php endif; ?>
+                        <?php if ((int) ($rm['likes_count'] ?? 0) > 0): ?>
+                            <span class="cp-card-likes" title="Curtidas"><i class="fa fa-heart"></i><?= (int) $rm['likes_count'] ?></span>
+                        <?php endif; ?>
                     </div>
                     <div class="cp-card-info">
                         <?php if ($rm['manufacturer']): ?>

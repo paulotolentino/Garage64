@@ -2847,6 +2847,24 @@ body.admin-layout {
   background: rgba(0, 0, 0, 0.6);
   color: #fff;
 }
+.cp-card-likes {
+  position: absolute;
+  bottom: 0.5rem;
+  left: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  font-size: 0.66rem;
+  font-weight: 600;
+  padding: 0.16rem 0.5rem;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+}
+.cp-card-likes i {
+  font-size: 0.62rem;
+  color: var(--amber-core);
+}
 .cp-card-info {
   display: flex;
   flex-direction: column;
