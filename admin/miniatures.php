@@ -433,13 +433,11 @@ $render_item = function (array $m) use ($admin_page) {
             <a href="<?= $edit_url ?>" class="admin-miniatures-act" title="Editar"><i class="fa fa-pen"></i></a>
             <a href="<?= $edit_url ?>#fotos" class="admin-miniatures-act" title="Gerenciar fotos"><i class="fa fa-images"></i></a>
             <a href="<?= e(mini_url($m)) ?>" target="_blank" class="admin-miniatures-act" title="Ver página pública"><i class="fa fa-up-right-from-square"></i></a>
-            <form method="post" action="/admin/miniatures?action=delete" style="display:contents"
-                  onsubmit="return confirm('Remover esta miniatura?')">
-                <?= csrf_field() ?>
-                <input type="hidden" name="id" value="<?= (int) $m['id'] ?>">
-                <button type="submit" class="admin-miniatures-act admin-miniatures-act-danger"
-                        title="Excluir"><i class="fa fa-trash"></i></button>
-            </form>
+            <?php // O form real de exclusão é emitido fora do #bulkForm (forms aninhados são inválidos
+                  // e o navegador os descarta). O botão se associa a ele via atributo form=. ?>
+            <button type="submit" form="del-<?= (int) $m['id'] ?>"
+                    class="admin-miniatures-act admin-miniatures-act-danger"
+                    title="Excluir" onclick="return confirm('Remover esta miniatura?')"><i class="fa fa-trash"></i></button>
         </div>
     </article>
     <?php
@@ -614,6 +612,16 @@ $render_item = function (array $m) use ($admin_page) {
         </div>
     <?php endif; ?>
 </form>
+
+<?php // Forms de exclusão (POST + CSRF), emitidos FORA do #bulkForm para não ficarem
+      // aninhados. Cada botão de lixeira no card aponta para o seu via form="del-{id}".
+      // O ownership é revalidado no handler (user_owns_miniature + WHERE user_id). ?>
+<?php foreach ($miniatures as $m): ?>
+<form id="del-<?= (int) $m['id'] ?>" method="post" action="/admin/miniatures?action=delete" hidden>
+    <?= csrf_field() ?>
+    <input type="hidden" name="id" value="<?= (int) $m['id'] ?>">
+</form>
+<?php endforeach; ?>
 
 <?php if ($admin_total_pages > 1): ?>
 <nav class="mt-4" aria-label="Paginação">
