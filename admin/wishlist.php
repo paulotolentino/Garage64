@@ -5,37 +5,82 @@ require_once __DIR__ . '/../includes/functions.php';
 
 require_login();
 
-// ─── Wishlist → Miniature conversion ─────────────────────────────────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['convert_id'])) {
+// ─── Marcar como comprada (wanted → purchased) ───────────────────────────────
+// Apenas altera o status. Não cria miniatura nem abre o cadastro de peça.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['purchase_id'])) {
     verify_csrf();
-    $id = (int) $_POST['convert_id'];
+    $id = (int) $_POST['purchase_id'];
+    // Ownership + estado de origem garantidos no WHERE (user_id + status atual).
+    db()->prepare("UPDATE wishlist SET status = 'purchased' WHERE id = ? AND user_id = ? AND status = 'wanted'")
+        ->execute([$id, current_user_id()]);
+    flash('Item marcado como comprado. Clique em “Recebi” quando ele chegar.');
+    redirect(wishlist_back_url());
+}
+
+// ─── Voltar para desejada (purchased → wanted) ───────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['unpurchase_id'])) {
+    verify_csrf();
+    $id = (int) $_POST['unpurchase_id'];
+    db()->prepare("UPDATE wishlist SET status = 'wanted' WHERE id = ? AND user_id = ? AND status = 'purchased'")
+        ->execute([$id, current_user_id()]);
+    flash('Item movido de volta para os desejados.');
+    redirect(wishlist_back_url());
+}
+
+// ─── Recebi (purchased → miniatura) ──────────────────────────────────────────
+// Encerra o ciclo da wishlist: cria a miniatura e remove o item.
+// A criação e a exclusão são atômicas (transação): em caso de erro nada é
+// gravado e a wishlist permanece intacta.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['receive_id'])) {
+    verify_csrf();
+    $id = (int) $_POST['receive_id'];
+    // Ownership: só carrega item do próprio usuário.
     $stmt = db()->prepare('SELECT * FROM wishlist WHERE id = ? AND user_id = ?');
     $stmt->execute([$id, current_user_id()]);
     $wish = $stmt->fetch();
     if ($wish) {
         $manufacturer = trim($wish['manufacturer'] ?? '');
         if (!$manufacturer) {
-            flash('Preencha o fabricante na wishlist antes de converter para a coleção.', 'warning');
+            flash('Preencha o fabricante na wishlist antes de adicionar à coleção.', 'warning');
             redirect('/admin/wishlist?edit=' . $id);
         }
-        $ins = db()->prepare(
-            'INSERT INTO miniatures (name, manufacturer, scale, `condition`, location, private_notes, user_id)
-             VALUES (:name, :manufacturer, :scale, :condition, :location, :private_notes, :user_id)'
-        );
-        $ins->execute([
-            'name'          => $wish['name'],
-            'manufacturer'  => $manufacturer,
-            'scale'         => $wish['scale'],
-            'condition'     => 'sealed',
-            'location'      => 'storage',
-            'private_notes' => $wish['notes'],
-            'user_id'       => current_user_id(),
-        ]);
-        $mini_id = (int) db()->lastInsertId();
-        db()->prepare("UPDATE wishlist SET status = 'purchased' WHERE id = ? AND user_id = ?")->execute([$id, current_user_id()]);
-        flash('Peça convertida para a coleção! Edite os detalhes agora.');
+        $pdo = db();
+        try {
+            $pdo->beginTransaction();
+            // Campos reaproveitados: name, manufacturer, scale, notes → private_notes.
+            // condition/location usam os defaults atuais. purchase_price fica vazio:
+            // target_price é "preço desejado", não o preço efetivamente pago
+            // (não há campo de preço pago no formulário da wishlist hoje).
+            $ins = $pdo->prepare(
+                'INSERT INTO miniatures (name, manufacturer, scale, `condition`, location, private_notes, user_id)
+                 VALUES (:name, :manufacturer, :scale, :condition, :location, :private_notes, :user_id)'
+            );
+            $ins->execute([
+                'name'          => $wish['name'],
+                'manufacturer'  => $manufacturer,
+                'scale'         => $wish['scale'],
+                'condition'     => 'sealed',
+                'location'      => 'storage',
+                'private_notes' => $wish['notes'],
+                'user_id'       => current_user_id(),
+            ]);
+            $mini_id = (int) $pdo->lastInsertId();
+            // Só remove da wishlist após o INSERT bem-sucedido.
+            $pdo->prepare('DELETE FROM wishlist WHERE id = ? AND user_id = ?')
+                ->execute([$id, current_user_id()]);
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            flash('Não foi possível adicionar à coleção. Nenhuma alteração foi feita. Tente novamente.', 'danger');
+            redirect(wishlist_back_url());
+        }
+        flash('Peça recebida e adicionada à coleção! Edite os detalhes agora.');
         redirect('/admin/miniatures?action=edit&id=' . $mini_id);
     }
+    // Item inexistente ou de outro usuário: volta para a listagem sem efeito.
+    redirect(wishlist_back_url());
 }
 
 /**
@@ -55,7 +100,11 @@ function wishlist_back_url(): string {
 }
 
 // ─── Save ─────────────────────────────────────────────────────────────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['convert_id']) && !isset($_POST['delete_id'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && !isset($_POST['purchase_id'])
+    && !isset($_POST['unpurchase_id'])
+    && !isset($_POST['receive_id'])
+    && !isset($_POST['delete_id'])) {
     verify_csrf();
     $id = (int) ($_POST['id'] ?? 0);
 
@@ -372,12 +421,15 @@ require_once __DIR__ . '/../includes/header_admin.php';
         <?php foreach ($items as $w):
             $st = $w['status'];
             $st_class = match ($st) { 'wanted' => 'wishlist-status-wanted', 'purchased' => 'wishlist-status-purchased', default => 'wishlist-status-cancelled' };
-            $st_icon  = match ($st) { 'wanted' => 'fa-heart', 'purchased' => 'fa-check', default => 'fa-ban' };
+            $st_icon  = match ($st) { 'wanted' => 'fa-heart', 'purchased' => 'fa-truck-fast', default => 'fa-ban' };
             $edit_url = $wl_url(['edit' => (int) $w['id']]);
         ?>
         <article class="wishlist-card<?= $st === 'cancelled' ? ' is-dim' : '' ?>">
             <div class="wishlist-card-top">
                 <span class="wishlist-status <?= $st_class ?>"><i class="fa <?= $st_icon ?>"></i><?= h(wishlist_status_label($st)) ?></span>
+                <?php if ($st === 'purchased'): ?>
+                    <span class="wishlist-card-await" title="Comprada — aguardando chegada"><i class="fa fa-hourglass-half"></i>aguardando recebimento</span>
+                <?php endif; ?>
             </div>
             <?php if (!empty($w['manufacturer'])): ?>
                 <div class="wishlist-card-maker"><?= e($w['manufacturer']) ?></div>
@@ -403,10 +455,35 @@ require_once __DIR__ . '/../includes/header_admin.php';
                 <?php if ($st === 'wanted'): ?>
                     <form method="post" action="/admin/wishlist.php" class="wishlist-card-form">
                         <?= csrf_field() ?>
-                        <input type="hidden" name="convert_id" value="<?= (int) $w['id'] ?>">
-                        <button type="submit" class="wishlist-card-btn is-success" title="Realizar desejo (mover para a coleção)"
-                                onclick="return confirm('Marcar como comprada e adicionar à coleção?')">
-                            <i class="fa fa-check"></i><span>Realizar</span>
+                        <input type="hidden" name="purchase_id" value="<?= (int) $w['id'] ?>">
+                        <input type="hidden" name="r_status" value="<?= e($wl_status) ?>">
+                        <input type="hidden" name="r_search" value="<?= e($wl_search) ?>">
+                        <input type="hidden" name="r_sort" value="<?= e($wl_sort) ?>">
+                        <button type="submit" class="wishlist-card-btn is-success" title="Marcar como comprada"
+                                onclick="return confirm('Marcar este item como comprado?')">
+                            <i class="fa fa-cart-shopping"></i><span>Comprei</span>
+                        </button>
+                    </form>
+                <?php elseif ($st === 'purchased'): ?>
+                    <form method="post" action="/admin/wishlist.php" class="wishlist-card-form">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="receive_id" value="<?= (int) $w['id'] ?>">
+                        <input type="hidden" name="r_status" value="<?= e($wl_status) ?>">
+                        <input type="hidden" name="r_search" value="<?= e($wl_search) ?>">
+                        <input type="hidden" name="r_sort" value="<?= e($wl_sort) ?>">
+                        <button type="submit" class="wishlist-card-btn is-success" title="Recebi (adicionar à coleção)"
+                                onclick="return confirm('Confirmar que esta miniatura foi recebida e adicioná-la à sua coleção?')">
+                            <i class="fa fa-box-open"></i><span>Recebi</span>
+                        </button>
+                    </form>
+                    <form method="post" action="/admin/wishlist.php" class="wishlist-card-form">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="unpurchase_id" value="<?= (int) $w['id'] ?>">
+                        <input type="hidden" name="r_status" value="<?= e($wl_status) ?>">
+                        <input type="hidden" name="r_search" value="<?= e($wl_search) ?>">
+                        <input type="hidden" name="r_sort" value="<?= e($wl_sort) ?>">
+                        <button type="submit" class="wishlist-card-btn" title="Voltar para desejada">
+                            <i class="fa fa-rotate-left"></i><span>Desejar</span>
                         </button>
                     </form>
                 <?php endif; ?>
