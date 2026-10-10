@@ -122,6 +122,7 @@ $clear_url = $base_url . ($panel_qs ? '?' . http_build_query($panel_qs) : '');
 // Metadados sociais (Open Graph / Twitter Cards) da garagem pública.
 // Imagem: 1) avatar do colecionador  2) imagem padrão (fallback no header).
 $og_title       = $display_name;
+$og_type        = 'profile';
 $og_description = number_format($collection_total) . ' miniatura' . ($collection_total !== 1 ? 's' : '')
                 . ' • ' . number_format($followers_count) . ' seguidor' . ($followers_count !== 1 ? 'es' : '')
                 . ' • Coleção pública de miniaturas diecast';
@@ -129,6 +130,7 @@ $og_url         = rtrim(APP_URL, '/') . '/u/' . rawurlencode($slug);
 $og_image       = $owner_avatar ? avatar_url($owner_avatar) : null;
 
 require_once __DIR__ . '/includes/header_public.php';
+require_once __DIR__ . '/includes/celebrate_banner.php';
 ?>
 
 <!-- Identidade do colecionador (sempre visível) ───────────────────────── -->
@@ -150,8 +152,15 @@ require_once __DIR__ . '/includes/header_public.php';
             <p class="cp-profile-bio"><?= e($owner['bio']) ?></p>
         <?php endif; ?>
     </div>
-    <?php if (!$is_own_garage): ?>
     <div class="cp-profile-follow">
+        <button type="button" class="follow-btn cp-share-btn js-share"
+                data-share-url="<?= e($og_url) ?>"
+                data-share-title="<?= e($display_name) ?> no <?= h(APP_NAME) ?>"
+                data-share-text="Confira a garagem de <?= e($display_name) ?>: <?= number_format($collection_total) ?> miniatura<?= $collection_total !== 1 ? 's' : '' ?>."
+                title="Compartilhar esta garagem">
+            <span class="js-share-label"><i class="fa fa-share-nodes"></i> <span>Compartilhar</span></span>
+        </button>
+        <?php if (!$is_own_garage): ?>
         <?php if (is_logged_in()): ?>
             <form method="post" action="/u/<?= e($slug) ?>" class="follow-form">
                 <?= csrf_field() ?>
@@ -172,8 +181,8 @@ require_once __DIR__ . '/includes/header_public.php';
                 <i class="fa fa-user-plus"></i> <span>Seguir</span>
             </a>
         <?php endif; ?>
+        <?php endif; ?>
     </div>
-    <?php endif; ?>
 </section>
 
 <!-- Estatísticas — identidade + social + coleção (sempre visíveis) ─────── -->

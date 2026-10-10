@@ -10,6 +10,13 @@ if (is_logged_in()) {
 $error   = '';
 $success = false;
 
+// ── Convite: quem indicou (via ?ref=slug ou campo oculto no POST) ────────────
+// O novo colecionador passa a seguir quem o convidou (loop social), e o
+// convidante recebe uma notificação de novo seguidor.
+$invite_ref     = trim($_GET['ref'] ?? $_POST['ref'] ?? '');
+$invite_ref     = strtolower(preg_replace('/[^a-z0-9_-]/i', '', $invite_ref));
+$inviter        = $invite_ref !== '' ? get_user_by_slug($invite_ref) : null;
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
     $username     = trim($_POST['username'] ?? '');
@@ -26,6 +33,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Auto-login: cria a sessão imediatamente após o cadastro,
             // reaproveitando o mesmo fluxo seguro do login tradicional.
             login($username, $password);
+
+            // Loop de convite: novo usuário segue quem o convidou + notifica.
+            if ($inviter && (int) $inviter['id'] !== current_user_id()) {
+                follow_user(current_user_id(), (int) $inviter['id']);
+                try {
+                    create_notification(
+                        (int) $inviter['id'], current_user_id(), 'follow',
+                        null, null, '/u/' . current_user_slug(), (int) $inviter['id']
+                    );
+                } catch (\Throwable $e) { /* nunca bloqueia o cadastro */ }
+            }
             redirect('/admin/');
         } else {
             $error = $result;
@@ -104,6 +122,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <p class="auth-form-lead">Leva menos de um minuto.</p>
             </div>
 
+            <?php if ($inviter): ?>
+                <div class="auth-alert auth-invite">
+                    <i class="fa fa-user-plus"></i>
+                    <span>Você foi convidado por <strong><?= e($inviter['display_name'] ?: $inviter['slug']) ?></strong>. Ao criar sua conta, vocês já ficam conectados.</span>
+                </div>
+            <?php endif; ?>
+
             <?php if ($error): ?>
                 <div class="auth-alert auth-alert-error">
                     <i class="fa fa-circle-exclamation"></i><span><?= h($error) ?></span>
@@ -112,6 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <form method="post" class="auth-form">
                 <?= csrf_field() ?>
+                <?php if ($invite_ref !== ''): ?><input type="hidden" name="ref" value="<?= e($invite_ref) ?>"><?php endif; ?>
                 <div class="auth-field">
                     <label for="username">Usuário <span class="auth-hint-inline">(será sua URL pública)</span></label>
                     <div class="auth-input-prefix">

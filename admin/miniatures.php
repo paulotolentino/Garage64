@@ -260,6 +260,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!empty($is_first_miniature)) {
         session_start_once();
         unset($_SESSION['stats_cache']); // garante que o dashboard saia do estado vazio
+        // Sinaliza a celebração de primeira peça — a página pública mostra um
+        // banner comemorativo com CTA de compartilhar (lido/limpo uma única vez).
+        $_SESSION['g64_celebrate'] = [
+            'name' => $data['name'],
+            'slug' => current_user_slug(),
+        ];
         if ((int) $data['is_public'] === 1) {
             // Página pública da miniatura recém-criada.
             redirect(mini_url(['id' => $miniature_id, 'name' => $data['name']]));

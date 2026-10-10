@@ -2474,6 +2474,24 @@ body.admin-layout {
 .cp-profile-follow {
   flex-shrink: 0;
   align-self: center;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+/* Botão "Compartilhar" da garagem — variante neutra ao lado do Seguir (âmbar). */
+.cp-share-btn {
+  background: var(--surface-inlay);
+  border-color: var(--line-strong);
+  color: var(--ink-secondary);
+}
+.cp-share-btn:hover {
+  background: var(--surface-inlay);
+  border-color: var(--line-amber);
+  color: var(--ink-primary);
+}
+.cp-share-btn.is-copied {
+  border-color: var(--state-loose);
+  color: var(--state-loose);
 }
 @media (max-width: 575.98px) {
   .cp-profile {
@@ -7719,4 +7737,86 @@ body.avatar-lightbox-open {
 .avatar-lightbox-close:focus-visible {
   background: rgba(255, 255, 255, 0.24);
   outline: none;
+}
+
+/* ── Banner de "momento mágico" (primeira miniatura) ─────────────────────── */
+.celebrate-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background:
+    radial-gradient(130% 130% at 0% 0%, var(--amber-glow), transparent 60%),
+    var(--surface-raised);
+  border: 1px solid var(--line-amber);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  animation: celebrate-in 0.5s ease both;
+}
+@keyframes celebrate-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.celebrate-banner__spark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--amber-core);
+  color: var(--surface-base);
+  font-size: 1.25rem;
+}
+.celebrate-banner__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.celebrate-banner__title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--ink-primary);
+}
+.celebrate-banner__text {
+  font-size: 0.9rem;
+  color: var(--ink-secondary);
+  line-height: 1.4;
+}
+.celebrate-banner__cta {
+  flex-shrink: 0;
+}
+.celebrate-banner__cta.is-copied {
+  background: var(--state-loose);
+  border-color: var(--state-loose);
+  color: #07210f;
+}
+@media (max-width: 575.98px) {
+  .celebrate-banner__cta {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ── Convite: banner "você foi convidado por…" na tela de cadastro ───────── */
+.auth-invite {
+  background: var(--amber-glow);
+  border: 1px solid var(--line-amber);
+  color: var(--ink-secondary);
+}
+.auth-invite i {
+  color: var(--amber-core);
+}
+.auth-invite strong {
+  color: var(--ink-primary);
 }

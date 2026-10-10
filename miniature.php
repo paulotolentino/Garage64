@@ -151,6 +151,7 @@ if (!$primary_photo && !empty($photos)) {
 
 // OG meta tags
 $og_title       = $miniature['name'];
+$og_type        = 'article';
 $og_url         = rtrim(APP_URL, '/') . mini_url($miniature);
 
 // Nome do colecionador dono (para "Coleção de X" na descrição compartilhada).
@@ -171,6 +172,7 @@ $og_description = $miniature['public_description']
 $og_image = $primary_photo ? rtrim(APP_URL, '/') . photo_url($primary_photo['file_path']) : null;
 
 require_once __DIR__ . '/includes/header_public.php';
+require_once __DIR__ . '/includes/celebrate_banner.php';
 ?>
 
 <nav class="md-breadcrumb" aria-label="breadcrumb">
@@ -295,9 +297,9 @@ require_once __DIR__ . '/includes/header_public.php';
             <a href="/" class="md-btn">
                 <i class="fa fa-arrow-left"></i>Voltar à coleção
             </a>
-            <button type="button" class="md-btn md-btn-primary" id="shareBtn"
-                    data-url="<?= e($og_url) ?>" data-title="<?= e($miniature['name']) ?>">
-                <i class="fa fa-share-nodes"></i>Compartilhar
+            <button type="button" class="md-btn md-btn-primary js-share"
+                    data-share-url="<?= e($og_url) ?>" data-share-title="<?= e($miniature['name']) ?>">
+                <span class="js-share-label"><i class="fa fa-share-nodes"></i>Compartilhar</span>
             </button>
         </div>
     </div>
@@ -709,20 +711,3 @@ document.getElementById('lbImg').addEventListener('touchend',   e => {
 })();
 </script>
 <?php endif; ?>
-<script>
-// Share button
-const shareBtn = document.getElementById('shareBtn');
-if (shareBtn) {
-    shareBtn.addEventListener('click', async () => {
-        const url   = shareBtn.dataset.url;
-        const title = shareBtn.dataset.title;
-        if (navigator.share) {
-            await navigator.share({ title, url }).catch(() => {});
-        } else {
-            await navigator.clipboard.writeText(url).catch(() => {});
-            shareBtn.innerHTML = '<i class="fa fa-check me-1"></i>Link copiado!';
-            setTimeout(() => { shareBtn.innerHTML = '<i class="fa fa-share-nodes me-1"></i>Compartilhar'; }, 2000);
-        }
-    });
-}
-</script>

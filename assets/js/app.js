@@ -210,4 +210,44 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }());
 
+    // ── Compartilhamento fácil (Web Share API + fallback de cópia) ────────────
+    // Qualquer elemento com [data-share-url] vira um botão de compartilhar.
+    // Opcional: [data-share-title] e [data-share-text].
+    (function () {
+        function feedback(el) {
+            if (!el) return;
+            var label = el.querySelector('.js-share-label');
+            var target = label || el;
+            var prev = target.innerHTML;
+            target.innerHTML = '<i class="fa fa-check"></i> Link copiado!';
+            el.classList.add('is-copied');
+            setTimeout(function () {
+                target.innerHTML = prev;
+                el.classList.remove('is-copied');
+            }, 2000);
+        }
+
+        document.addEventListener('click', function (e) {
+            var btn = e.target.closest('[data-share-url]');
+            if (!btn) return;
+            e.preventDefault();
+
+            var url   = btn.dataset.shareUrl || window.location.href;
+            var title = btn.dataset.shareTitle || document.title;
+            var text  = btn.dataset.shareText || '';
+
+            if (navigator.share) {
+                navigator.share({ title: title, text: text, url: url }).catch(function () {});
+                return;
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url)
+                    .then(function () { feedback(btn); })
+                    .catch(function () { window.prompt('Copie o link:', url); });
+            } else {
+                window.prompt('Copie o link:', url);
+            }
+        });
+    }());
+
 });
