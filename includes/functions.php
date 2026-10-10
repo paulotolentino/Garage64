@@ -181,6 +181,7 @@ function get_miniatures(array $filters = []): array {
         'year_desc'    => 'm.year DESC, m.name ASC',
         'recent'       => 'm.created_at DESC',
         'oldest'       => 'm.created_at ASC',
+        'views'        => 'm.views DESC, m.name ASC',
         default        => 'm.is_featured DESC, m.sort_order ASC',
     };
 
