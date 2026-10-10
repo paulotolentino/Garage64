@@ -1443,3 +1443,313 @@ function mark_all_notifications_read(int $user_id): bool {
         return false;
     }
 }
+
+// ─── View analytics ──────────────────────────────────────────────────────────
+
+/** Crawlers, link-preview fetchers, scripted clients, prefetches and non-GET requests. */
+function view_is_bot(): bool {
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') return true;
+
+    $purpose = strtolower(($_SERVER['HTTP_SEC_PURPOSE'] ?? '') . ' ' . ($_SERVER['HTTP_PURPOSE'] ?? '') . ' ' . ($_SERVER['HTTP_X_MOZ'] ?? ''));
+    if (str_contains($purpose, 'prefetch') || str_contains($purpose, 'prerender')) return true;
+
+    $ua = trim((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''));
+    if ($ua === '') return true;
+
+    return (bool) preg_match(
+        '~bot|crawl|spider|slurp|preview|monitor|uptime|lighthouse|headless|phantom|'
+        . 'facebookexternalhit|facebookcatalog|whatsapp|telegram|discord|slack|skype|embedly|'
+        . 'pinterest|vkshare|validator|curl|wget|python|java/|go-http|okhttp|axios|node-fetch|'
+        . 'libwww|httpclient|postman|insomnia~i',
+        $ua
+    );
+}
+
+/** Where a view came from, as [source, detail]. A ?src= tag beats the Referer. */
+function view_source(): array {
+    $tagged = [
+        'share'    => ['share', null],
+        'whatsapp' => ['social', 'whatsapp'],
+        'convite'  => ['invite', null],
+    ];
+    $src = strtolower(trim((string) ($_GET['src'] ?? '')));
+    if (isset($tagged[$src])) return $tagged[$src];
+
+    $ref  = (string) ($_SERVER['HTTP_REFERER'] ?? '');
+    $host = strtolower((string) parse_url($ref, PHP_URL_HOST));
+    if ($host === '') return ['direct', null];
+    $host = preg_replace('/^(www|m|l|lm|mobile)\./', '', $host);
+
+    $own_hosts = array_filter([
+        preg_replace('/^www\./', '', strtolower((string) parse_url(APP_URL, PHP_URL_HOST))),
+        preg_replace(['/^www\./', '/:\d+$/'], '', strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''))),
+    ]);
+    if (in_array($host, $own_hosts, true)) {
+        $path = (string) parse_url($ref, PHP_URL_PATH);
+        $detail = match (true) {
+            str_starts_with($path, '/community')   => 'mural',
+            str_starts_with($path, '/collections') => 'colecoes',
+            str_starts_with($path, '/u/')          => 'garagem',
+            str_starts_with($path, '/admin')       => 'painel',
+            $path === '' || $path === '/'          => 'inicio',
+            default                                => 'outro',
+        };
+        return ['internal', $detail];
+    }
+
+    $rules = [
+        '~(^|\.)google\.~'                                  => ['search', 'google'],
+        '~(^|\.)bing\.com$~'                                => ['search', 'bing'],
+        '~(^|\.)duckduckgo\.com$~'                          => ['search', 'duckduckgo'],
+        '~(^|\.)yahoo\.~'                                   => ['search', 'yahoo'],
+        '~(^|\.)(ecosia\.org|yandex\.|search\.brave\.com)~' => ['search', 'outros'],
+        '~(^|\.)(whatsapp\.com|wa\.me)$~'                   => ['social', 'whatsapp'],
+        '~(^|\.)instagram\.com$~'                           => ['social', 'instagram'],
+        '~(^|\.)(facebook\.com|fb\.com|fb\.me)$~'           => ['social', 'facebook'],
+        '~(^|\.)(t\.co|twitter\.com|x\.com)$~'              => ['social', 'x'],
+        '~(^|\.)reddit\.com$~'                              => ['social', 'reddit'],
+        '~(^|\.)(t\.me|telegram\.org)$~'                    => ['social', 'telegram'],
+        '~(^|\.)(discord\.com|discordapp\.com)$~'           => ['social', 'discord'],
+        '~(^|\.)(pinterest\.|pin\.it)~'                     => ['social', 'pinterest'],
+        '~(^|\.)(linkedin\.com|lnkd\.in)$~'                 => ['social', 'linkedin'],
+        '~(^|\.)tiktok\.com$~'                              => ['social', 'tiktok'],
+        '~(^|\.)(youtube\.com|youtu\.be)$~'                 => ['social', 'youtube'],
+    ];
+    foreach ($rules as $re => $hit) {
+        if (preg_match($re, $host)) return $hit;
+    }
+    return ['referral', mb_substr($host, 0, 100)];
+}
+
+function view_source_label(string $source, ?string $detail): string {
+    $names = [
+        'google' => 'Google', 'bing' => 'Bing', 'duckduckgo' => 'DuckDuckGo', 'yahoo' => 'Yahoo',
+        'outros' => 'outros buscadores', 'whatsapp' => 'WhatsApp', 'instagram' => 'Instagram',
+        'facebook' => 'Facebook', 'x' => 'X (Twitter)', 'reddit' => 'Reddit', 'telegram' => 'Telegram',
+        'discord' => 'Discord', 'pinterest' => 'Pinterest', 'linkedin' => 'LinkedIn', 'tiktok' => 'TikTok',
+        'youtube' => 'YouTube', 'mural' => 'Mural', 'colecoes' => 'Explorar coleções',
+        'garagem' => 'Garagens', 'painel' => 'Painel', 'inicio' => 'Página inicial', 'outro' => 'outras páginas',
+    ];
+    $d = $detail !== null ? ($names[$detail] ?? $detail) : null;
+    return match ($source) {
+        'direct'   => 'Acesso direto',
+        'share'    => 'Link compartilhado',
+        'invite'   => 'Convite',
+        'search'   => 'Busca · ' . ($d ?? 'buscadores'),
+        'social'   => $d ?? 'Redes sociais',
+        'internal' => APP_NAME . ' · ' . ($d ?? 'site'),
+        'referral' => 'Site · ' . ($d ?? 'externo'),
+        default    => 'Outros',
+    };
+}
+
+function view_source_icon(string $source, ?string $detail): string {
+    $brands = ['whatsapp', 'instagram', 'facebook', 'reddit', 'telegram', 'discord', 'pinterest', 'linkedin', 'tiktok', 'youtube', 'google'];
+    if ($detail === 'x') return 'fa-brands fa-x-twitter';
+    if ($detail !== null && in_array($detail, $brands, true)) return 'fa-brands fa-' . $detail;
+    return match ($source) {
+        'direct'   => 'fa fa-keyboard',
+        'share'    => 'fa fa-share-nodes',
+        'invite'   => 'fa fa-user-plus',
+        'search'   => 'fa fa-magnifying-glass',
+        'social'   => 'fa fa-users',
+        'internal' => 'fa fa-warehouse',
+        default    => 'fa fa-globe',
+    };
+}
+
+function country_label(?string $code): string {
+    if (!$code) return 'Desconhecido';
+    $name = class_exists('Locale') ? (string) Locale::getDisplayRegion('-' . $code, 'pt_BR') : '';
+    return ($name !== '' && $name !== $code) ? $name : $code;
+}
+
+function country_flag(?string $code): string {
+    if (!$code || !preg_match('/^[A-Z]{2}$/', $code)) return '🌐';
+    return mb_chr(0x1F1E6 + ord($code[0]) - 65) . mb_chr(0x1F1E6 + ord($code[1]) - 65);
+}
+
+function geo_clean(mixed $v): ?string {
+    $v = trim((string) $v);
+    return $v === '' ? null : mb_substr($v, 0, 100);
+}
+
+/** Visitor location: Cloudflare headers first, then a cached third-party lookup. */
+function geo_lookup(string $ip): array {
+    $geo = ['country_code' => null, 'region' => null, 'city' => null];
+    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+        return $geo;
+    }
+
+    if (function_exists('is_cloudflare_ip') && is_cloudflare_ip($_SERVER['REMOTE_ADDR'] ?? '')) {
+        $cc = strtoupper((string) ($_SERVER['HTTP_CF_IPCOUNTRY'] ?? ''));
+        // XX = unknown, T1 = Tor exit node.
+        if (preg_match('/^[A-Z]{2}$/', $cc) && $cc !== 'XX' && $cc !== 'T1') $geo['country_code'] = $cc;
+        $geo['region'] = geo_clean($_SERVER['HTTP_CF_REGION'] ?? null);
+        $geo['city']   = geo_clean($_SERVER['HTTP_CF_IPCITY'] ?? null);
+        if ($geo['country_code'] !== null && $geo['city'] !== null) return $geo;
+    }
+
+    $fill = static function (array $geo, array $found): array {
+        foreach ($geo as $k => $v) {
+            if ($v === null && !empty($found[$k])) $geo[$k] = $found[$k];
+        }
+        return $geo;
+    };
+
+    $ip_hash = hash_hmac('sha256', 'geo|' . $ip, ANALYTICS_SALT);
+    try {
+        $st = db()->prepare(
+            'SELECT country_code, region, city FROM geo_cache
+             WHERE ip_hash = ? AND fetched_at > NOW() - INTERVAL 30 DAY'
+        );
+        $st->execute([$ip_hash]);
+        if ($row = $st->fetch()) return $fill($geo, $row);
+    } catch (\Throwable $e) { /* cache table missing — lookup without caching */ }
+
+    if (GEO_LOOKUP_URL === '') return $geo;
+
+    $url = sprintf(GEO_LOOKUP_URL, rawurlencode($ip));
+    $raw = false;
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER    => true,
+            CURLOPT_CONNECTTIMEOUT_MS => 800,
+            CURLOPT_TIMEOUT_MS        => 1500,
+            CURLOPT_HTTPHEADER        => ['Accept: application/json'],
+        ]);
+        $raw = curl_exec($ch);
+    } elseif (ini_get('allow_url_fopen')) {
+        $ctx = stream_context_create(['http' => ['timeout' => 1.5, 'ignore_errors' => true]]);
+        $raw = @file_get_contents($url, false, $ctx);
+    }
+    if (!is_string($raw) || $raw === '') return $geo;
+
+    $j = json_decode($raw, true);
+    $found = ['country_code' => null, 'region' => null, 'city' => null];
+    if (is_array($j) && ($j['success'] ?? true) !== false) {
+        $cc = strtoupper((string) ($j['country_code'] ?? $j['countryCode'] ?? ''));
+        $found = [
+            'country_code' => preg_match('/^[A-Z]{2}$/', $cc) ? $cc : null,
+            'region'       => geo_clean($j['region'] ?? $j['regionName'] ?? null),
+            'city'         => geo_clean($j['city'] ?? null),
+        ];
+    }
+
+    // Failed lookups are cached too, so an unresolvable IP isn't retried on every view.
+    try {
+        db()->prepare(
+            'INSERT INTO geo_cache (ip_hash, country_code, region, city) VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE country_code = VALUES(country_code), region = VALUES(region),
+                                     city = VALUES(city), fetched_at = CURRENT_TIMESTAMP'
+        )->execute([$ip_hash, $found['country_code'], $found['region'], $found['city']]);
+    } catch (\Throwable $e) {}
+
+    return $fill($geo, $found);
+}
+
+/**
+ * Counts a public view unless it's from the owner, a bot, or a repeat visit by the
+ * same visitor within VIEW_DEDUPE_HOURS. Returns whether the view was counted.
+ */
+function record_miniature_view(array $miniature): bool {
+    $mini_id  = (int) $miniature['id'];
+    $owner_id = (int) $miniature['user_id'];
+    if (is_logged_in() && current_user_id() === $owner_id) return false;
+    if (view_is_bot()) return false;
+
+    $ip      = client_ip();
+    $visitor = hash_hmac('sha256', $ip . '|' . ($_SERVER['HTTP_USER_AGENT'] ?? ''), ANALYTICS_SALT);
+
+    try {
+        $chk = db()->prepare(
+            'SELECT 1 FROM miniature_views
+             WHERE miniature_id = ? AND visitor_hash = ? AND created_at > NOW() - INTERVAL ? HOUR LIMIT 1'
+        );
+        $chk->execute([$mini_id, $visitor, (int) VIEW_DEDUPE_HOURS]);
+        if ($chk->fetchColumn()) return false;
+
+        [$source, $detail] = view_source();
+        $geo = geo_lookup($ip);
+        db()->prepare(
+            'INSERT INTO miniature_views
+                (miniature_id, owner_id, visitor_hash, source, source_detail, country_code, region, city)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        )->execute([$mini_id, $owner_id, $visitor, $source, $detail, $geo['country_code'], $geo['region'], $geo['city']]);
+    } catch (\PDOException $e) {
+        // Analytics table not migrated yet: fall back to per-session dedupe.
+        session_start_once();
+        if (($_SESSION['g64_viewed'][$mini_id] ?? 0) > time() - VIEW_DEDUPE_HOURS * 3600) return false;
+        $_SESSION['g64_viewed'][$mini_id] = time();
+    }
+
+    db()->prepare('UPDATE miniatures SET views = views + 1 WHERE id = ?')->execute([$mini_id]);
+    return true;
+}
+
+/** Counted views of an owner's miniatures (or a single one) in the last $days, by source and location. */
+function get_view_analytics(int $owner_id, ?int $miniature_id = null, int $days = 30): array {
+    $out = ['total' => 0, 'sources' => [], 'countries' => [], 'cities' => []];
+
+    $where  = 'owner_id = ? AND created_at >= NOW() - INTERVAL ? DAY';
+    $params = [$owner_id, $days];
+    if ($miniature_id) {
+        $where   .= ' AND miniature_id = ?';
+        $params[] = $miniature_id;
+    }
+
+    try {
+        $st = db()->prepare("SELECT COUNT(*) FROM miniature_views WHERE $where");
+        $st->execute($params);
+        $out['total'] = (int) $st->fetchColumn();
+        if ($out['total'] === 0) return $out;
+
+        $pct = static fn(int $c): int => (int) round($c * 100 / $out['total']);
+
+        $st = db()->prepare(
+            "SELECT source, source_detail, COUNT(*) AS c FROM miniature_views
+             WHERE $where GROUP BY source, source_detail ORDER BY c DESC LIMIT 8"
+        );
+        $st->execute($params);
+        foreach ($st->fetchAll() as $r) {
+            $out['sources'][] = [
+                'label' => view_source_label($r['source'], $r['source_detail']),
+                'icon'  => view_source_icon($r['source'], $r['source_detail']),
+                'count' => (int) $r['c'],
+                'pct'   => $pct((int) $r['c']),
+            ];
+        }
+
+        $st = db()->prepare(
+            "SELECT country_code, COUNT(*) AS c FROM miniature_views
+             WHERE $where GROUP BY country_code ORDER BY c DESC LIMIT 8"
+        );
+        $st->execute($params);
+        foreach ($st->fetchAll() as $r) {
+            $out['countries'][] = [
+                'label' => country_label($r['country_code']),
+                'flag'  => country_flag($r['country_code']),
+                'count' => (int) $r['c'],
+                'pct'   => $pct((int) $r['c']),
+            ];
+        }
+
+        $st = db()->prepare(
+            "SELECT city, region, country_code, COUNT(*) AS c FROM miniature_views
+             WHERE $where AND city IS NOT NULL
+             GROUP BY city, region, country_code ORDER BY c DESC LIMIT 8"
+        );
+        $st->execute($params);
+        foreach ($st->fetchAll() as $r) {
+            $out['cities'][] = [
+                'label' => $r['city'] . ($r['region'] && $r['region'] !== $r['city'] ? ', ' . $r['region'] : ''),
+                'flag'  => country_flag($r['country_code']),
+                'count' => (int) $r['c'],
+                'pct'   => $pct((int) $r['c']),
+            ];
+        }
+    } catch (\Throwable $e) { /* analytics table missing — empty report */ }
+
+    return $out;
+}

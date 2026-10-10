@@ -69,6 +69,21 @@ if (!defined('OG_DEFAULT_IMAGE')) {
     define('OG_DEFAULT_IMAGE', APP_URL . '/assets/img/og-default.png');
 }
 
+// View analytics: salt for hashing visitor IPs (raw IPs are never stored).
+// Set a long random string in config.local.php for production.
+if (!defined('ANALYTICS_SALT')) {
+    define('ANALYTICS_SALT', hash('sha256', DB_HOST . '|' . DB_NAME . '|' . DB_USER . '|' . DB_PASS));
+}
+// IP geolocation fallback when Cloudflare location headers are absent ('%s' = IP).
+// Set to '' to disable third-party lookups (only Cloudflare headers are used).
+if (!defined('GEO_LOOKUP_URL')) {
+    define('GEO_LOOKUP_URL', 'https://ipwho.is/%s');
+}
+// A repeat view of the same miniature by the same visitor inside this window isn't counted.
+if (!defined('VIEW_DEDUPE_HOURS')) {
+    define('VIEW_DEDUPE_HOURS', 6);
+}
+
 // ─── HTTPS detection ─────────────────────────────────────────────────────────
 // Central helper reused by the session cookie hardening (secure flag) and the
 // environment detection below. Conservative: only reports HTTPS when the

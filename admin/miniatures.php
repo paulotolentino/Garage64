@@ -843,6 +843,24 @@ $render_item = function (array $m) use ($admin_page) {
                 </div>
             </div>
 
+            <!-- Audiência -->
+            <?php if ($m['is_public']): ?>
+            <div class="col-12">
+                <div class="card bg-dark border-secondary">
+                    <div class="card-header border-secondary text-warning small fw-semibold">
+                        <i class="fa fa-chart-simple me-1"></i>Audiência
+                    </div>
+                    <div class="card-body">
+                        <?php
+                        $va_days = 30;
+                        $va      = get_view_analytics((int) $m['user_id'], (int) $m['id'], $va_days);
+                        require __DIR__ . '/../includes/view_analytics.php';
+                        ?>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+
             <!-- Financeiro -->
             <div class="col-12">
                 <div class="card bg-dark border-secondary">

@@ -7901,3 +7901,72 @@ body.avatar-lightbox-open {
     justify-content: center;
   }
 }
+
+/* ── View analytics (dashboard + miniature detail) ───────────────── */
+.va-total {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  color: var(--ink-secondary);
+  font-size: 0.9rem;
+}
+.va-total strong {
+  font-size: 1.75rem;
+  color: var(--amber-core);
+  font-weight: 800;
+  line-height: 1;
+}
+.va-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+}
+.va-col {
+  background: var(--surface-raised);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+.va-col-title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  font-weight: 700;
+  margin-bottom: var(--space-3);
+}
+.va-col-title i { margin-right: var(--space-2); color: var(--amber-core); }
+.va-row + .va-row { margin-top: var(--space-3); }
+.va-row-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: 0.85rem;
+  color: var(--ink-primary);
+  margin-bottom: var(--space-1);
+}
+.va-row-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.va-row-label i { width: 1.1em; margin-right: var(--space-1); color: var(--ink-secondary); text-align: center; }
+.va-flag { margin-right: var(--space-1); }
+.va-row-count { color: var(--ink-secondary); font-variant-numeric: tabular-nums; }
+.va-bar {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-inlay);
+  overflow: hidden;
+}
+.va-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--amber-deep), var(--amber-bright));
+}
+.va-row-empty, .va-empty { color: var(--ink-muted); font-size: 0.85rem; margin: 0; }
+.va-note { margin: var(--space-3) 0 0; font-size: 0.75rem; color: var(--ink-muted); }
+.va-note i { margin-right: var(--space-1); }

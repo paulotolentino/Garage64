@@ -21,12 +21,9 @@ if (!$miniature || !$miniature['is_public']) {
 $photos   = get_miniature_photos($id);
 $tags     = get_miniature_tags($id);
 $adjacent = get_adjacent_miniatures($id, (int) ($miniature['user_id'] ?? 0));
-// Increment view counter (best-effort, ignore errors)
+// Count the view (skips owner, bots, prefetches and repeat visits); best-effort.
 try {
-    db()->prepare('UPDATE miniatures SET views = views + 1 WHERE id = ?')->execute([$id]);
-    // Invalidate dashboard stats cache so top_viewed reflects the new count
-    session_start_once();
-    unset($_SESSION['stats_cache']);
+    record_miniature_view($miniature);
 } catch (Throwable $e) {}
 
 // ─── Public rating (POST) ─────────────────────────────────────────────────────
@@ -298,7 +295,7 @@ require_once __DIR__ . '/includes/celebrate_banner.php';
                 <i class="fa fa-arrow-left"></i>Voltar à coleção
             </a>
             <button type="button" class="md-btn md-btn-primary js-share"
-                    data-share-url="<?= e($og_url) ?>" data-share-title="<?= e($miniature['name']) ?>">
+                    data-share-url="<?= e($og_url . '?src=share') ?>" data-share-title="<?= e($miniature['name']) ?>">
                 <span class="js-share-label"><i class="fa fa-share-nodes"></i>Compartilhar</span>
             </button>
         </div>

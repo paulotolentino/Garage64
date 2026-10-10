@@ -220,6 +220,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             KEY idx_rate_limits_updated (updated_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'miniature_views' => "CREATE TABLE miniature_views (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            miniature_id INT UNSIGNED NOT NULL,
+            owner_id INT UNSIGNED NOT NULL,
+            visitor_hash CHAR(64) NOT NULL,
+            source VARCHAR(20) NOT NULL DEFAULT 'direct',
+            source_detail VARCHAR(100) NULL,
+            country_code CHAR(2) NULL,
+            region VARCHAR(100) NULL,
+            city VARCHAR(100) NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_views_dedupe (miniature_id, visitor_hash, created_at),
+            KEY idx_views_owner (owner_id, created_at),
+            FOREIGN KEY (miniature_id) REFERENCES miniatures(id) ON DELETE CASCADE,
+            FOREIGN KEY (owner_id) REFERENCES admin_users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'geo_cache' => "CREATE TABLE geo_cache (
+            ip_hash CHAR(64) NOT NULL PRIMARY KEY,
+            country_code CHAR(2) NULL,
+            region VARCHAR(100) NULL,
+            city VARCHAR(100) NULL,
+            fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     ];
     $check_table = db()->prepare(
         "SELECT COUNT(*) FROM information_schema.tables

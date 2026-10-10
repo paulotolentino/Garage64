@@ -314,6 +314,17 @@ require_once __DIR__ . '/../includes/header_admin.php';
 </div>
 <?php endif; ?>
 
+<!-- ═══ De onde vêm as visualizações ═══════════════════════════════════ -->
+<?php
+$va_days = 30;
+$va      = get_view_analytics((int) current_user_id(), null, $va_days);
+?>
+<div class="dash-section">
+    <div class="lp-eyebrow">Audiência</div>
+    <h2 class="lp-section-title mb-3">De onde vêm suas visualizações</h2>
+    <?php require __DIR__ . '/../includes/view_analytics.php'; ?>
+</div>
+
 <!-- ═══ Seção 4 — Ações rápidas ════════════════════════════════════════ -->
 <div class="dash-section">
     <div class="lp-eyebrow">Atalhos</div>
