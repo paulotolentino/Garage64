@@ -548,6 +548,7 @@ $render_item = function (array $m) use ($admin_page) {
             <select name="sort" class="admin-miniatures-select">
                 <option value="" <?= ($filters['sort'] ?? '') === '' ? 'selected' : '' ?>>Mais relevantes</option>
                 <option value="recent" <?= ($filters['sort'] ?? '') === 'recent' ? 'selected' : '' ?>>Mais recente</option>
+                <option value="oldest" <?= ($filters['sort'] ?? '') === 'oldest' ? 'selected' : '' ?>>Mais antiga</option>
                 <option value="name" <?= ($filters['sort'] ?? '') === 'name' ? 'selected' : '' ?>>Nome A–Z</option>
                 <option value="manufacturer" <?= ($filters['sort'] ?? '') === 'manufacturer' ? 'selected' : '' ?>>Fabricante</option>
                 <option value="year_desc" <?= ($filters['sort'] ?? '') === 'year_desc' ? 'selected' : '' ?>>Ano (novo→antigo)</option>

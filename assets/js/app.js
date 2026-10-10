@@ -129,4 +129,85 @@ document.addEventListener('DOMContentLoaded', function () {
         counters.forEach(function (el) { io.observe(el); });
     }());
 
+    // ── Avatar lightbox: clicar na foto de perfil para vê-la ampliada ─────────
+    (function () {
+        var avatars = document.querySelectorAll('.avatar-zoomable');
+        if (!avatars.length) return;
+
+        var overlay = null;
+        var lastFocused = null;
+
+        function close() {
+            if (!overlay) return;
+            overlay.classList.remove('is-open');
+            document.body.classList.remove('avatar-lightbox-open');
+            document.removeEventListener('keydown', onKeydown);
+            var el = overlay;
+            overlay = null;
+            setTimeout(function () { el.remove(); }, 200);
+            if (lastFocused) lastFocused.focus();
+        }
+
+        function onKeydown(e) {
+            if (e.key === 'Escape') close();
+        }
+
+        function open(src, alt) {
+            if (!src) return;
+            lastFocused = document.activeElement;
+
+            overlay = document.createElement('div');
+            overlay.className = 'avatar-lightbox';
+            overlay.setAttribute('role', 'dialog');
+            overlay.setAttribute('aria-modal', 'true');
+            overlay.setAttribute('aria-label', alt || 'Foto de perfil');
+
+            var closeBtn = document.createElement('button');
+            closeBtn.type = 'button';
+            closeBtn.className = 'avatar-lightbox-close';
+            closeBtn.setAttribute('aria-label', 'Fechar');
+            closeBtn.innerHTML = '<i class="fa fa-xmark"></i>';
+
+            var img = document.createElement('img');
+            img.className = 'avatar-lightbox-img';
+            img.src = src;
+            img.alt = alt || 'Foto de perfil';
+
+            overlay.appendChild(closeBtn);
+            overlay.appendChild(img);
+            document.body.appendChild(overlay);
+            document.body.classList.add('avatar-lightbox-open');
+
+            overlay.addEventListener('click', function (e) {
+                if (e.target === overlay || e.target === closeBtn || e.target.closest('.avatar-lightbox-close')) {
+                    close();
+                }
+            });
+            document.addEventListener('keydown', onKeydown);
+
+            requestAnimationFrame(function () { overlay.classList.add('is-open'); });
+            closeBtn.focus();
+        }
+
+        avatars.forEach(function (el) {
+            var img = el.tagName === 'IMG' ? el : el.querySelector('img');
+            if (!img) return;
+            el.classList.add('avatar-zoomable-active');
+            el.style.cursor = 'zoom-in';
+            if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+            el.setAttribute('role', 'button');
+            el.setAttribute('aria-label', 'Ver foto de perfil ampliada');
+
+            el.addEventListener('click', function () {
+                open(img.currentSrc || img.src, img.alt);
+            });
+            el.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    open(img.currentSrc || img.src, img.alt);
+                }
+            });
+        });
+    }());
+
 });

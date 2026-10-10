@@ -135,7 +135,7 @@ require_once __DIR__ . '/includes/header_public.php';
 <section class="cp-profile">
     <div class="cp-profile-avatar">
         <?php if ($owner_avatar): ?>
-            <img src="<?= e(avatar_url($owner_avatar)) ?>" alt="<?= e($display_name) ?>">
+            <img class="avatar-zoomable" src="<?= e(avatar_url($owner_avatar)) ?>" alt="<?= e($display_name) ?>">
         <?php else: ?>
             <span class="cp-profile-initial"><?= mb_strtoupper(mb_substr($display_name, 0, 1)) ?></span>
         <?php endif; ?>

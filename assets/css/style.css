@@ -120,11 +120,7 @@ a:hover {
 
 /* Frosted glass effect after scrolling past the hero */
 .navbar.navbar-scrolled {
-  background-color: color-mix(
-    in srgb,
-    var(--surface-base) 88%,
-    transparent
-  ) !important;
+  background-color: rgba(12, 14, 18, 0.88) !important;
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   box-shadow: 0 4px 28px rgba(0, 0, 0, 0.55);
@@ -1335,7 +1331,7 @@ body.admin-layout {
 .admin-nav-link:hover {
   background: color-mix(in srgb, var(--amber-core) 7%, transparent);
   color: var(--ink-secondary);
-  border-left-color: color-mix(in srgb, var(--amber-core) 40%, transparent);
+  border-left-color: rgba(245, 166, 35, 0.4);
 }
 
 .admin-nav-link.active {
@@ -1787,7 +1783,7 @@ body.admin-layout {
 }
 
 .lp-feature-card:hover {
-  border-color: color-mix(in srgb, var(--amber-core) 30%, transparent);
+  border-color: rgba(245, 166, 35, 0.3);
   transform: translateY(-4px);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
 }
@@ -1825,7 +1821,7 @@ body.admin-layout {
 }
 
 .lp-collection-card:hover {
-  border-color: color-mix(in srgb, var(--amber-core) 30%, transparent);
+  border-color: rgba(245, 166, 35, 0.3);
   transform: translateY(-4px);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
 }
@@ -1844,7 +1840,7 @@ body.admin-layout {
     color-mix(in srgb, var(--amber-core) 8%, transparent) 0%,
     color-mix(in srgb, var(--amber-core) 2%, transparent) 100%
   );
-  border: 1px solid color-mix(in srgb, var(--amber-core) 20%, transparent);
+  border: 1px solid rgba(245, 166, 35, 0.2);
   border-radius: 20px;
   padding: 2.75rem 2rem;
   text-align: center;
@@ -5082,6 +5078,7 @@ body.admin-layout {
   margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -7653,4 +7650,73 @@ body.admin-layout {
   .follows-bio {
     display: none;
   }
+}
+
+/* ── Avatar lightbox (clicar na foto de perfil para ampliar) ─────────────── */
+.avatar-zoomable-active {
+  cursor: zoom-in;
+}
+.avatar-zoomable-active:focus-visible {
+  outline: 2px solid var(--accent, #f0a500);
+  outline-offset: 3px;
+}
+
+body.avatar-lightbox-open {
+  overflow: hidden;
+}
+
+.avatar-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(8, 10, 14, 0.85);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.avatar-lightbox.is-open {
+  opacity: 1;
+}
+
+.avatar-lightbox-img {
+  max-width: min(90vw, 520px);
+  max-height: 85vh;
+  width: auto;
+  height: auto;
+  border-radius: var(--radius-lg);
+  object-fit: contain;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  transform: scale(0.92);
+  transition: transform 0.2s ease;
+}
+.avatar-lightbox.is-open .avatar-lightbox-img {
+  transform: scale(1);
+}
+
+.avatar-lightbox-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.avatar-lightbox-close:hover,
+.avatar-lightbox-close:focus-visible {
+  background: rgba(255, 255, 255, 0.24);
+  outline: none;
 }

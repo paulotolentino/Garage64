@@ -76,15 +76,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             };
 
             if ($image) {
-                // Crop to square and resize to 200x200
+                // Preserve aspect ratio; cap the largest side at 512px.
+                // The circular thumbnails are cropped visually via CSS, so we
+                // keep the full (non-cropped) image for the lightbox / server.
                 $src_w = imagesx($image);
                 $src_h = imagesy($image);
-                $side  = min($src_w, $src_h);
-                $src_x = (int)(($src_w - $side) / 2);
-                $src_y = (int)(($src_h - $side) / 2);
+                $max   = 512;
+                $scale = min(1, $max / max($src_w, $src_h));
+                $dst_w = max(1, (int)round($src_w * $scale));
+                $dst_h = max(1, (int)round($src_h * $scale));
 
-                $thumb = imagecreatetruecolor(200, 200);
-                imagecopyresampled($thumb, $image, 0, 0, $src_x, $src_y, 200, 200, $side, $side);
+                $thumb = imagecreatetruecolor($dst_w, $dst_h);
+                imagecopyresampled($thumb, $image, 0, 0, 0, 0, $dst_w, $dst_h, $src_w, $src_h);
                 imagewebp($thumb, $dest, 85);
                 imagedestroy($image);
                 imagedestroy($thumb);

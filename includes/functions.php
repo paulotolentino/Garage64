@@ -180,6 +180,7 @@ function get_miniatures(array $filters = []): array {
         'year_asc'     => 'm.year ASC, m.name ASC',
         'year_desc'    => 'm.year DESC, m.name ASC',
         'recent'       => 'm.created_at DESC',
+        'oldest'       => 'm.created_at ASC',
         default        => 'm.is_featured DESC, m.sort_order ASC',
     };
 
@@ -434,7 +435,12 @@ function get_all_collections(): array {
 
 function avatar_url(?string $avatar): string {
     if ($avatar) {
-        return UPLOADS_URL . 'avatars/' . rawurlencode($avatar);
+        $url  = UPLOADS_URL . 'avatars/' . rawurlencode($avatar);
+        $path = UPLOADS_DIR . 'avatars/' . $avatar;
+        if (is_file($path)) {
+            $url .= '?v=' . filemtime($path);
+        }
+        return $url;
     }
     return APP_URL . '/assets/img/avatar-default.svg';
 }
