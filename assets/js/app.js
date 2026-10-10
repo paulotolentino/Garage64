@@ -232,12 +232,12 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!btn) return;
             e.preventDefault();
 
-            var url   = btn.dataset.shareUrl || window.location.href;
+            var url = btn.dataset.shareUrl || window.location.href;
             var title = btn.dataset.shareTitle || document.title;
-            var text  = btn.dataset.shareText || '';
+            var text = btn.dataset.shareText || '';
 
             if (navigator.share) {
-                navigator.share({ title: title, text: text, url: url }).catch(function () {});
+                navigator.share({ title: title, text: text, url: url }).catch(function () { });
                 return;
             }
             if (navigator.clipboard && navigator.clipboard.writeText) {

@@ -7820,3 +7820,84 @@ body.avatar-lightbox-open {
 .auth-invite strong {
   color: var(--ink-primary);
 }
+
+/* ── Card "Convidar colecionadores" (dashboard) ──────────────────────────── */
+.invite-card {
+  background:
+    radial-gradient(120% 140% at 100% 0%, var(--amber-glow), transparent 55%),
+    var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.4rem;
+  margin-top: 1.5rem;
+}
+.invite-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+.invite-card-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.8rem;
+  height: 2.8rem;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--amber-glow);
+  border: 1px solid var(--line-amber);
+  color: var(--amber-core);
+  font-size: 1.15rem;
+}
+.invite-card-head-text {
+  min-width: 0;
+}
+.invite-card-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--ink-primary);
+  margin: 0 0 0.1rem;
+  line-height: 1.2;
+}
+.invite-card-sub {
+  font-size: 0.88rem;
+  color: var(--ink-muted);
+  margin: 0;
+}
+.invite-card-linkrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+.invite-card-input {
+  flex: 1 1 220px;
+  min-width: 0;
+  cursor: text;
+}
+.invite-card-copy,
+.invite-card-wa {
+  flex-shrink: 0;
+}
+.invite-card-copy.is-copied {
+  background: var(--state-loose);
+  border-color: var(--state-loose);
+  color: #07210f;
+}
+.invite-card-wa {
+  border-color: rgba(37, 211, 102, 0.5);
+  color: #25d366;
+}
+.invite-card-wa:hover {
+  border-color: #25d366;
+  color: #fff;
+  background: rgba(37, 211, 102, 0.15);
+}
+@media (max-width: 575.98px) {
+  .invite-card-copy,
+  .invite-card-wa {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}

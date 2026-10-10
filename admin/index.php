@@ -61,6 +61,7 @@ if ((int) $stats['total'] === 0) {
             </li>
         </ul>
     </section>
+    <?php require_once __DIR__ . '/../includes/invite_card.php'; ?>
     <?php
     require_once __DIR__ . '/../includes/footer_admin.php';
     exit;
@@ -411,6 +412,8 @@ require_once __DIR__ . '/../includes/header_admin.php';
         </div>
     </div>
 </div>
+
+<?php require_once __DIR__ . '/../includes/invite_card.php'; ?>
 
 <?php require_once __DIR__ . '/../includes/footer_admin.php'; ?>
 <script>
