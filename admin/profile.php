@@ -117,6 +117,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             db()->prepare(
                 'UPDATE admin_users SET display_name = ?, bio = ?, avatar = ?, slug = ?, email = ?, password_hash = ? WHERE id = ?'
             )->execute([$display_name, $bio ?: null, $avatar ?: null, $new_slug, $new_email, $hash, current_user_id()]);
+            try {
+                db()->prepare('DELETE FROM persistent_logins WHERE user_id = ?')->execute([current_user_id()]);
+                issue_persistent_login(current_user_id());
+            } catch (Throwable $e) { error_log($e->getMessage()); }
         } else {
             db()->prepare(
                 'UPDATE admin_users SET display_name = ?, bio = ?, avatar = ?, slug = ?, email = ? WHERE id = ?'

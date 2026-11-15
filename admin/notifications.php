@@ -44,6 +44,8 @@ $page_title    = 'Notificações';
 
 // ─── Type metadata (icon + label + color modifier) ───────────────────────────
 $type_meta = [
+    'registration' => ['icon' => 'fa-user-plus', 'label' => 'criou uma garagem no Garage64', 'mod' => 'follow'],
+    'message' => ['icon' => 'fa-envelope', 'label' => 'enviou uma mensagem para você', 'mod' => 'comment'],
     'comment' => ['icon' => 'fa-comment', 'label' => 'comentou na sua miniatura', 'mod' => 'comment'],
     'reply'   => ['icon' => 'fa-reply',   'label' => 'respondeu seu comentário',  'mod' => 'reply'],
     'mention' => ['icon' => 'fa-at',      'label' => 'mencionou você',            'mod' => 'mention'],
@@ -52,7 +54,7 @@ $type_meta = [
 ];
 
 // ─── Filter (query param, no JS required) ────────────────────────────────────
-$valid_filters = ['all', 'unread', 'comment', 'reply', 'mention', 'like', 'follow'];
+$valid_filters = ['all', 'unread', 'comment', 'reply', 'mention', 'like', 'follow', 'registration', 'message'];
 $filter = (string) ($_GET['filter'] ?? 'all');
 if (!in_array($filter, $valid_filters, true)) {
     $filter = 'all';
@@ -81,6 +83,7 @@ $group_labels = ['today' => 'Hoje', 'week' => 'Esta semana', 'older' => 'Mais an
 
 // ─── Filter tabs definition ──────────────────────────────────────────────────
 $filter_tabs = [
+    'message' => ['label' => 'Mensagens', 'icon' => 'fa-envelope'],
     'all'     => ['label' => 'Tudo',      'icon' => 'fa-layer-group'],
     'unread'  => ['label' => 'Não lidas', 'icon' => 'fa-circle-dot'],
     'comment' => ['label' => 'Comentários','icon' => 'fa-comment'],
@@ -89,6 +92,8 @@ $filter_tabs = [
     'like'    => ['label' => 'Curtidas',  'icon' => 'fa-heart'],
     'follow'  => ['label' => 'Seguidores','icon' => 'fa-user-plus'],
 ];
+
+if (is_superadmin()) $filter_tabs['registration'] = ['label' => 'Cadastros', 'icon' => 'fa-user-plus'];
 
 require_once __DIR__ . '/../includes/header_admin.php';
 ?>

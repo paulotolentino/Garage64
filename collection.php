@@ -162,6 +162,7 @@ require_once __DIR__ . '/includes/celebrate_banner.php';
         </button>
         <?php if (!$is_own_garage): ?>
         <?php if (is_logged_in()): ?>
+            <a href="/admin/messages?user=<?= $uid ?>" class="follow-btn cp-share-btn" title="Enviar mensagem para <?= e($display_name) ?>"><i class="fa fa-envelope"></i><span>Mensagem</span></a>
             <form method="post" action="/u/<?= e($slug) ?>" class="follow-form">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="<?= $viewer_is_following ? 'unfollow' : 'follow' ?>">

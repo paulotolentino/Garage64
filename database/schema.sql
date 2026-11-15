@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id INT UNSIGNED NOT NULL,
     actor_user_id INT UNSIGNED NOT NULL,
-    type ENUM('comment', 'reply', 'mention', 'like', 'follow') NOT NULL,
+    type ENUM('comment', 'reply', 'mention', 'like', 'follow', 'registration', 'message') NOT NULL,
     -- miniature_id is NULL for notifications not tied to a miniature (e.g. follow).
     miniature_id INT UNSIGNED NULL,
     -- target_user_id references the user a non-miniature notification is about
@@ -157,6 +157,32 @@ CREATE TABLE IF NOT EXISTS user_follows (
     FOREIGN KEY (follower_id) REFERENCES admin_users(id) ON DELETE CASCADE,
     FOREIGN KEY (following_id) REFERENCES admin_users(id) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+-- Persistent authentication and private messages
+CREATE TABLE IF NOT EXISTS persistent_logins (
+    selector CHAR(24) PRIMARY KEY,
+    token_hash CHAR(64) NOT NULL,
+    csrf_token CHAR(64) NOT NULL,
+    user_id INT UNSIGNED NOT NULL,
+    expires_at DATETIME NOT NULL,
+    KEY (user_id),
+    KEY (expires_at),
+    FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS direct_messages (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    sender_id INT UNSIGNED NOT NULL,
+    recipient_id INT UNSIGNED NOT NULL,
+    body TEXT NOT NULL,
+    is_read TINYINT(1) NOT NULL DEFAULT 0,
+    read_at DATETIME DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    KEY inbox (recipient_id, is_read, id),
+    KEY conversation (sender_id, recipient_id, id),
+    FOREIGN KEY (sender_id) REFERENCES admin_users(id) ON DELETE CASCADE,
+    FOREIGN KEY (recipient_id) REFERENCES admin_users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Fixed-window rate limiting (brute force / mass-signup protection).
 -- One row per bucket (e.g. 'login:ip:1.2.3.4', 'login:user:joe', 'register:ip:1.2.3.4').
 -- Counter resets when the window expires; old rows are purged opportunistically.

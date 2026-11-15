@@ -7,7 +7,7 @@
     <link rel="icon" type="image/svg+xml" href="<?= h(APP_URL) ?>/assets/img/favicon-cart.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-    <link rel="stylesheet" href="<?= h(APP_URL) ?>/assets/css/style.css">
+    <link rel="stylesheet" href="<?= h(APP_URL) ?>/assets/css/style.css?v=20261115c">
 </head>
 <body class="admin-layout">
 <?php $unread_notifs = get_unread_notifications_count(current_user_id()); ?>
@@ -19,9 +19,7 @@
     </a>
     <a class="admin-topbar-bell position-relative me-2" href="<?= h(APP_URL) ?>/admin/notifications" aria-label="Notificações">
         <i class="fa fa-bell"></i>
-        <?php if ($unread_notifs > 0): ?>
-            <span class="badge rounded-pill bg-warning text-dark position-absolute top-0 start-100 translate-middle"><?= $unread_notifs > 99 ? '99+' : (int) $unread_notifs ?></span>
-        <?php endif; ?>
+        <span data-notification-count class="badge rounded-pill bg-warning text-dark position-absolute top-0 start-100 translate-middle"><?= $unread_notifs ?: '' ?></span>
     </a>
     <button class="admin-sidebar-toggle" id="sidebarToggle" aria-label="Menu">
         <i class="fa fa-bars"></i>
@@ -47,6 +45,10 @@
         <a href="<?= h(APP_URL) ?>/admin/" class="admin-nav-link <?= $cur === 'index.php' ? 'active' : '' ?>">
             <i class="fa fa-tachometer-alt"></i>Dashboard
         </a>
+        <a href="<?= h(APP_URL) ?>/admin/messages" class="admin-nav-link <?= $is('messages.php') ?>">
+            <i class="fa fa-envelope"></i><span>Mensagens</span>
+            <span data-message-count></span>
+        </a>
         <a href="<?= h(APP_URL) ?>/admin/miniatures" class="admin-nav-link <?= $is('miniatures.php') ?>">
             <i class="fa fa-car"></i>Miniaturas
         </a>
@@ -55,9 +57,7 @@
         </a>
         <a href="<?= h(APP_URL) ?>/admin/notifications" class="admin-nav-link <?= $is('notifications.php') ?>">
             <i class="fa fa-bell"></i>Notificações
-            <?php if ($unread_notifs > 0): ?>
-                <span class="badge rounded-pill bg-warning text-dark ms-2"><?= $unread_notifs > 99 ? '99+' : (int) $unread_notifs ?></span>
-            <?php endif; ?>
+            <span data-notification-count><?= (int) $unread_notifs ?></span>
         </a>
 
         <div class="admin-nav-section">Configurações</div>

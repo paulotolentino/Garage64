@@ -8,13 +8,67 @@ function session_start_once(): void {
         // cross-site sending (SameSite=Lax) and only allow HTTPS-only transport
         // when the request is actually served over TLS (keeps local HTTP working).
         session_set_cookie_params([
-            'lifetime' => 0,
+            'lifetime' => 2592000,
             'path'     => '/',
             'secure'   => is_https(),
             'httponly' => true,
             'samesite' => 'Lax',
         ]);
         session_start();
+        if (empty($_SESSION['user_id']) && !empty($_COOKIE['garage64_remember'])) {
+            restore_persistent_login();
+        }
+    }
+}
+
+function remember_cookie(string $value, int $expires): void {
+    setcookie('garage64_remember', $value, [
+        'expires' => $expires, 'path' => '/', 'secure' => is_https(),
+        'httponly' => true, 'samesite' => 'Lax',
+    ]);
+}
+
+function restore_persistent_login(): void {
+    $parts = explode(':', (string) ($_COOKIE['garage64_remember'] ?? ''));
+    if (count($parts) !== 2 || !preg_match('/^[a-f0-9]{24}$/', $parts[0]) || !preg_match('/^[a-f0-9]{64}$/', $parts[1])) {
+        remember_cookie('', time() - 3600);
+        return;
+    }
+    require_once __DIR__ . '/db.php';
+    try {
+        $st = db()->prepare('SELECT p.token_hash, p.csrf_token, u.* FROM persistent_logins p JOIN admin_users u ON u.id = p.user_id WHERE p.selector = ? AND p.expires_at > NOW()');
+        $st->execute([$parts[0]]);
+        $user = $st->fetch();
+        if (!$user || $user['is_banned'] || !hash_equals($user['token_hash'], hash('sha256', $parts[1]))) {
+            remember_cookie('', time() - 3600);
+            return;
+        }
+        session_regenerate_id(true);
+        set_authenticated_user($user);
+        $_SESSION['csrf_token'] = $user['csrf_token'];
+    } catch (Throwable $e) {
+        error_log('Persistent login unavailable: ' . $e->getMessage());
+    }
+}
+
+function set_authenticated_user(array $user): void {
+    $_SESSION['user_id'] = (int) $user['id'];
+    $_SESSION['user_slug'] = $user['slug'] ?? $user['username'];
+    $_SESSION['is_superadmin'] = (bool) ($user['is_superadmin'] ?? false);
+    $_SESSION['admin_logged_in'] = true;
+    $_SESSION['admin_username'] = $user['username'];
+}
+
+function issue_persistent_login(int $user_id): void {
+    try {
+        $selector = bin2hex(random_bytes(12));
+        $token = bin2hex(random_bytes(32));
+        $old = explode(':', (string) ($_COOKIE['garage64_remember'] ?? ''))[0];
+        db()->prepare('DELETE FROM persistent_logins WHERE selector = ? OR expires_at <= NOW()')->execute([$old]);
+        db()->prepare('INSERT INTO persistent_logins (selector, token_hash, csrf_token, user_id, expires_at) VALUES (?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))')->execute([$selector, hash('sha256', $token), csrf_token(), $user_id]);
+        remember_cookie($selector . ':' . $token, time() + 2592000);
+    } catch (Throwable $e) {
+        error_log('Persistent login unavailable: ' . $e->getMessage());
     }
 }
 
@@ -94,6 +148,7 @@ function login(string $username, string $password): bool|string {
     $_SESSION['is_superadmin']   = (bool) ($user['is_superadmin'] ?? false);
     $_SESSION['admin_logged_in'] = true; // legacy compat
     $_SESSION['admin_username']  = $user['username'];
+    issue_persistent_login((int) $user['id']);
     return true;
 }
 
@@ -151,6 +206,14 @@ function register_user(string $username, string $email, string $password, string
          VALUES (?, ?, ?, ?, ?, 0, 0)'
     )->execute([$username, $slug, $display_name, $email, $hash]);
 
+    $new_user_id = (int) db()->lastInsertId();
+    require_once __DIR__ . '/functions.php';
+    try {
+        foreach (db()->query('SELECT id FROM admin_users WHERE is_superadmin = 1 AND is_banned = 0')->fetchAll() as $admin) {
+            create_notification((int) $admin['id'], $new_user_id, 'registration', null, null, '/u/' . rawurlencode($slug), $new_user_id);
+        }
+    } catch (Throwable $e) { error_log('Registration notification: ' . $e->getMessage()); }
+
     // Count only successful account creations against the per-IP budget.
     rate_limit_hit($reg_bucket, 3600);
     return true;
@@ -158,6 +221,13 @@ function register_user(string $username, string $email, string $password, string
 
 function logout(): void {
     session_start_once();
+    require_once __DIR__ . '/db.php';
+    try {
+        $selector = explode(':', (string) ($_COOKIE['garage64_remember'] ?? ''))[0];
+        db()->prepare('DELETE FROM persistent_logins WHERE selector = ?')->execute([$selector]);
+    } catch (Throwable $e) { error_log($e->getMessage()); }
+    remember_cookie('', time() - 3600);
+    setcookie(session_name(), '', ['expires' => time() - 3600, 'path' => '/', 'secure' => is_https(), 'httponly' => true, 'samesite' => 'Lax']);
     $_SESSION = [];
     session_destroy();
 }
@@ -186,6 +256,11 @@ function verify_csrf(): void {
     $token = $_POST['csrf_token'] ?? '';
     if (!isset($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
         http_response_code(403);
+        if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'Garage64') {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'error' => 'Sua sessão expirou. Atualize a página e tente novamente.']);
+            exit;
+        }
         exit('Invalid CSRF token.');
     }
 }
@@ -201,7 +276,7 @@ function reserved_slugs(): array {
         'img', 'includes', 'index', 'install', 'js', 'login', 'logout', 'manutencao',
         'migrate_webp', 'mini', 'miniature', 'notifications', 'profile', 'register',
         'robots', 'setup', 'sitemap', 'static', 'tags', 'u', 'uploads', 'users',
-        'wishlist',
+        'wishlist', 'messages', 'activity',
     ];
 }
 

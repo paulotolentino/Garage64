@@ -195,6 +195,29 @@ já reflita o IP real em toda a aplicação.
 
 ## Uso
 
+### Atualização de interações, mensagens e login persistente
+
+Depois de publicar os arquivos, entre como superadmin em `/admin/manutencao` e
+execute **Aplicar índices & migrations**. O botão cria as tabelas de mensagens
+privadas e tokens de login e habilita avisos de novos cadastros e mensagens,
+sem precisar executar SQL manualmente. O `database/schema.sql` contém a
+estrutura completa para instalações novas.
+
+Faça login novamente após a migração para ativar a persistência por 30 dias.
+Os tokens são armazenados como hash e revogados ao sair ou trocar a senha.
+As notificações aparecem no menu público e no painel; os contadores são
+atualizados a cada 30 segundos enquanto o site está visível. O chat consulta
+novas mensagens a cada 5 segundos. Esta versão não envia e-mails nem push.
+As confirmações de visualização usam `direct_messages.read_at`, adicionado pelo
+mesmo botão de migrations. Apenas mensagens recebidas visíveis na conversa,
+com a aba ativa e em foco, são confirmadas; abrir a página ou consultar novas
+mensagens não marca a conversa inteira como lida. O horário da primeira
+visualização é preservado, e mensagens antigas sem esse registro não recebem
+um horário retroativo.
+Curtidas, avaliações e comentários usam atualizações locais sem criar entradas
+no histórico do navegador; sem JavaScript, os formulários tradicionais continuam
+disponíveis.
+
 - **Galeria pública:** `https://garage64.online/`
 - **Coleção de um colecionador:** `https://garage64.online/u/{slug}`
 - **Página da miniatura:** `https://garage64.online/mini/{id}`

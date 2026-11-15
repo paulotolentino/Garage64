@@ -43,7 +43,7 @@
     <link rel="icon" type="image/svg+xml" href="/assets/img/favicon-cart.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-    <link rel="stylesheet" href="/assets/css/style.css">
+    <link rel="stylesheet" href="/assets/css/style.css?v=20261115">
 </head>
 <body class="public-layout <?= $body_class ?? '' ?>">
 <?php
@@ -82,6 +82,8 @@ $g64_initial = mb_strtoupper(mb_substr($g64_name !== '' ? $g64_name : ($g64_slug
         <div class="collapse navbar-collapse" id="navMain">
             <ul class="g64-public-header__nav navbar-nav ms-auto mb-2 mb-lg-0">
                 <?php if ($g64_logged): ?>
+                <li class="nav-item"><a class="g64-public-header__link" href="/admin/notifications" aria-label="Notificações"><i class="fa fa-bell"></i> <span data-notification-count><?= $g64_unread ?></span></a></li>
+                <li class="nav-item"><a class="g64-public-header__link" href="/admin/messages"><i class="fa fa-envelope me-1"></i>Mensagens <span data-message-count></span></a></li>
                 <li class="nav-item">
                     <a class="g64-public-header__link" href="/community"><i class="fa fa-bullhorn me-1"></i>Mural</a>
                 </li>

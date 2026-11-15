@@ -18,12 +18,29 @@ if (!$miniature || !$miniature['is_public']) {
     exit;
 }
 
+$owner_stmt = db()->prepare('SELECT slug FROM admin_users WHERE id = ?');
+$owner_stmt->execute([(int) $miniature['user_id']]);
+$garage_url = '/u/' . rawurlencode((string) $owner_stmt->fetchColumn());
+$async = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'Garage64';
+function interaction_done(string $url, int $status = 200): never {
+    global $async;
+    if ($async) {
+        http_response_code($status);
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store');
+        echo json_encode(['ok' => $status === 200, 'error' => $status === 429 ? 'Muitas tentativas. Tente novamente mais tarde.' : ($status !== 200 ? 'Não foi possível salvar. Verifique os dados e sua permissão.' : null)]);
+        exit;
+    }
+    header('Location: ' . $url);
+    exit;
+}
+
 $photos   = get_miniature_photos($id);
 $tags     = get_miniature_tags($id);
 $adjacent = get_adjacent_miniatures($id, (int) ($miniature['user_id'] ?? 0));
 // Count the view (skips owner, bots, prefetches and repeat visits); best-effort.
 try {
-    record_miniature_view($miniature);
+    if ($_SERVER['REQUEST_METHOD'] === 'GET') record_miniature_view($miniature);
 } catch (Throwable $e) {}
 
 // ─── Public rating (POST) ─────────────────────────────────────────────────────
@@ -39,47 +56,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['public_rating'])) {
     // Não substitui o dedupe nem altera ip_hash/média — apenas barra flood de POST.
     $rl_bucket = 'rating:ip:' . $ip;
     if (rate_limit_exceeded($rl_bucket, 20, 3600)) {
-        header('Location: ' . mini_url($miniature) . '?rl=rating#rating');
-        exit;
+        interaction_done(mini_url($miniature) . '?rl=rating#rating', 429);
     }
     if (submit_public_rating($id, $submitted, $ip)) {
         $rating_msg = 'ok';
         rate_limit_hit($rl_bucket, 3600);
-    }
-    header('Location: ' . mini_url($miniature) . '#rating');
-    exit;
+    } elseif ($async) interaction_done('', 422);
+    interaction_done(mini_url($miniature) . '#rating');
 }
 
 // ─── Comentários (POST) ───────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['comment_action'])) {
     verify_csrf();
+    if (!is_logged_in() && $async) interaction_done('', 401);
     $action = (string) $_POST['comment_action'];
+    $saved = false;
     if ($action === 'create' && is_logged_in()) {
         // Rate limit por usuário: 10 comentários (raiz + resposta) / 5 min.
         // Bloqueia ANTES de create_miniature_comment(), evitando comentário,
         // resposta, menção e qualquer notificação quando o limite é atingido.
         $rl_bucket = 'comment:user:' . current_user_id();
         if (rate_limit_exceeded($rl_bucket, 10, 300)) {
-            header('Location: ' . mini_url($miniature) . '?rl=comment#comments');
-            exit;
+            interaction_done(mini_url($miniature) . '?rl=comment#comments', 429);
         }
         $parent_id = (int) ($_POST['comment_parent_id'] ?? 0) ?: null;
         if (create_miniature_comment($id, current_user_id(), (string) ($_POST['comment_body'] ?? ''), $parent_id)) {
             rate_limit_hit($rl_bucket, 300);
+            $saved = true;
         }
     } elseif ($action === 'pin') {
-        toggle_miniature_comment_pin((int) ($_POST['comment_id'] ?? 0), current_user_id());
+        $comment = get_miniature_comment((int) ($_POST['comment_id'] ?? 0));
+        $saved = $comment && (int) $comment['miniature_id'] === $id && toggle_miniature_comment_pin((int) $comment['id'], current_user_id());
     } elseif ($action === 'delete') {
-        delete_miniature_comment((int) ($_POST['comment_id'] ?? 0), current_user_id());
+        $comment = get_miniature_comment((int) ($_POST['comment_id'] ?? 0));
+        $saved = $comment && (int) $comment['miniature_id'] === $id && delete_miniature_comment((int) $comment['id'], current_user_id());
     }
-    header('Location: ' . mini_url($miniature) . '#comments');
-    exit;
+    if (!$saved && $async) interaction_done('', 422);
+    interaction_done(mini_url($miniature) . '#comments');
 }
 
 // ─── Curtidas (POST) ──────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array($_POST['action'], ['like', 'unlike'], true)) {
     // Usuário deslogado é direcionado ao login ao tentar curtir.
     if (!is_logged_in()) {
+        if ($async) interaction_done('', 401);
         header('Location: /admin/login');
         exit;
     }
@@ -96,8 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
     } else {
         unlike_miniature($id, current_user_id());
     }
-    header('Location: ' . mini_url($miniature) . '#rating');
-    exit;
+    interaction_done(mini_url($miniature) . '#rating');
 }
 
 $comments = get_miniature_comments($id);
@@ -173,7 +192,7 @@ require_once __DIR__ . '/includes/celebrate_banner.php';
 ?>
 
 <nav class="md-breadcrumb" aria-label="breadcrumb">
-    <a href="/">Coleção</a>
+    <a href="<?= e($garage_url) ?>">Coleção</a>
     <i class="fa fa-chevron-right"></i>
     <?php if ($miniature['manufacturer']): ?>
         <span class="md-bc-maker"><?= e($miniature['manufacturer']) ?></span>
@@ -284,14 +303,14 @@ require_once __DIR__ . '/includes/celebrate_banner.php';
         <?php if (!empty($tags)): ?>
             <div class="md-tags">
                 <?php foreach ($tags as $tag): ?>
-                    <a href="/?tag_id=<?= $tag['id'] ?>" class="md-tag">#<?= e($tag['name']) ?></a>
+                    <a href="<?= e($garage_url) ?>?tag_id=<?= $tag['id'] ?>" class="md-tag">#<?= e($tag['name']) ?></a>
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
 
         <!-- Ações -->
         <div class="md-actions">
-            <a href="/" class="md-btn">
+            <a href="<?= e($garage_url) ?>" class="md-btn">
                 <i class="fa fa-arrow-left"></i>Voltar à coleção
             </a>
             <button type="button" class="md-btn md-btn-primary js-share"

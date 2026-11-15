@@ -1297,7 +1297,7 @@ function create_notification(
 ): bool {
     if ($user_id <= 0 || $actor_user_id <= 0) return false;
     if ($user_id === $actor_user_id) return false; // no self-notification
-    if (!in_array($type, ['comment', 'reply', 'mention', 'like', 'follow'], true)) return false;
+    if (!in_array($type, ['comment', 'reply', 'mention', 'like', 'follow', 'registration', 'message'], true)) return false;
     try {
         // Avoid duplicate notifications of the same type for the same comment.
         if ($comment_id !== null) {
@@ -1360,6 +1360,10 @@ function create_comment_notifications(
         );
     } else {
         // Reply → notify the author of the root comment.
+        create_notification(
+            (int) $miniature['user_id'], $actor_user_id, 'reply',
+            $miniature_id, $comment_id, $target_url
+        );
         $root = get_miniature_comment($parent_id);
         if ($root) {
             create_notification(

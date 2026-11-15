@@ -8,7 +8,8 @@
     </div>
 </footer>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="<?= h(APP_URL) ?>/assets/js/app.js"></script>
+<script src="<?= h(APP_URL) ?>/assets/js/app.js?v=20261114"></script>
+<script src="/assets/js/engagement.js?v=20261114"></script>
 <script>
 // Scroll-to-top visibility
 (function () {

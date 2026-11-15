@@ -125,6 +125,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
 
     // Schema migrations (column additions) — ['table', 'column', 'sql']
     $columns = [
+        'message_read_at' => ['direct_messages', 'read_at', 'ALTER TABLE direct_messages ADD COLUMN read_at DATETIME DEFAULT NULL AFTER is_read'],
         'is_public'        => ['miniatures',  'is_public',      "ALTER TABLE miniatures ADD COLUMN is_public TINYINT(1) NOT NULL DEFAULT 1 AFTER emotional_rating"],
         'views'            => ['miniatures',  'views',          "ALTER TABLE miniatures ADD COLUMN views INT UNSIGNED NOT NULL DEFAULT 0 AFTER is_public"],
         'is_featured'      => ['miniatures',  'is_featured',    "ALTER TABLE miniatures ADD COLUMN is_featured TINYINT(1) NOT NULL DEFAULT 0 AFTER is_public"],
@@ -174,7 +175,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             user_id INT UNSIGNED NOT NULL,
             actor_user_id INT UNSIGNED NOT NULL,
-            type ENUM('comment','reply','mention','like','follow') NOT NULL,
+            type ENUM('comment','reply','mention','like','follow','registration','message') NOT NULL,
             miniature_id INT UNSIGNED NULL,
             target_user_id INT UNSIGNED NULL,
             comment_id INT UNSIGNED NULL,
@@ -212,6 +213,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
             KEY idx_follow_follower (follower_id),
             FOREIGN KEY (follower_id) REFERENCES admin_users(id) ON DELETE CASCADE,
             FOREIGN KEY (following_id) REFERENCES admin_users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'persistent_logins' => "CREATE TABLE persistent_logins (
+            selector CHAR(24) PRIMARY KEY,
+            token_hash CHAR(64) NOT NULL,
+            csrf_token CHAR(64) NOT NULL,
+            user_id INT UNSIGNED NOT NULL,
+            expires_at DATETIME NOT NULL,
+            KEY (user_id),
+            KEY (expires_at),
+            FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'direct_messages' => "CREATE TABLE direct_messages (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            sender_id INT UNSIGNED NOT NULL,
+            recipient_id INT UNSIGNED NOT NULL,
+            body TEXT NOT NULL,
+            is_read TINYINT(1) NOT NULL DEFAULT 0,
+            read_at DATETIME DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY inbox (recipient_id, is_read, id),
+            KEY conversation (sender_id, recipient_id, id),
+            FOREIGN KEY (sender_id) REFERENCES admin_users(id) ON DELETE CASCADE,
+            FOREIGN KEY (recipient_id) REFERENCES admin_users(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
         'rate_limits' => "CREATE TABLE rate_limits (
             bucket VARCHAR(100) NOT NULL PRIMARY KEY,
@@ -293,11 +317,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
         $notif_type = $chk_notif_type->fetchColumn();
         if (!$notif_type) {
             $skipped[] = 'enum:notifications.type (table missing)';
-        } elseif (str_contains((string) $notif_type, "'like'") && str_contains((string) $notif_type, "'follow'")) {
+        } elseif (count(array_filter(['like', 'follow', 'registration', 'message'], static fn($type) => !str_contains((string) $notif_type, "'" . $type . "'"))) === 0) {
             $skipped[] = 'enum:notifications.type';
         } else {
             db()->exec(
-                "ALTER TABLE notifications MODIFY COLUMN type ENUM('comment','reply','mention','like','follow') NOT NULL"
+                "ALTER TABLE notifications MODIFY COLUMN type ENUM('comment','reply','mention','like','follow','registration','message') NOT NULL"
             );
             $applied[] = 'enum:notifications.type';
         }
