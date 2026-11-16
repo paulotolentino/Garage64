@@ -5,6 +5,29 @@ require_once __DIR__ . '/../includes/functions.php';
 
 require_superadmin();
 
+if ($_SERVER['REQUEST_METHOD']==='POST' && str_starts_with((string)($_POST['action'] ?? ''),'email_')) {
+    verify_csrf();
+    require_once __DIR__ . '/../includes/email_notifications.php';
+    header('Content-Type: application/json; charset=utf-8');
+    try {
+        if ($_POST['action']==='email_settings') {
+            $values=[isset($_POST['automatic'])?1:0];
+            db()->prepare('INSERT INTO email_delivery_settings (id,automatic) VALUES (1,?) ON DUPLICATE KEY UPDATE automatic=VALUES(automatic)')->execute($values);
+            echo json_encode(['ok'=>true,'message'=>'Processamento automático atualizado. Os resumos permanecem semanais.']);
+        } elseif ($_POST['action']==='email_process') {
+            if (SENDGRID_API_KEY==='') throw new RuntimeException('Configure SENDGRID_API_KEY no arquivo local.');
+            $result=process_notification_emails(1);
+            require_once __DIR__.'/../includes/email_campaigns.php';
+            $campaign_result=process_email_campaigns(1);
+            echo json_encode(['ok'=>true,'message'=>'Resumos semanais enviados: '.$result['sent'].'. Comunicados enviados: '.$campaign_result['sent'].'. Falhas: '.($result['failed']+$campaign_result['failed']).'. Sem atividade ou antes de completar 7 dias, nenhum resumo é enviado.']);
+        } else { http_response_code(400); echo json_encode(['ok'=>false,'message'=>'Ação inválida.']); }
+    } catch (Throwable $e) {
+        http_response_code(422);
+        echo json_encode(['ok'=>false,'message'=>$e instanceof InvalidArgumentException || $e instanceof RuntimeException && !($e instanceof PDOException) ? $e->getMessage() : 'Não foi possível processar. Confira as migrations e os logs do servidor.']);
+    }
+    exit;
+}
+
 // ─── AJAX BATCH ENDPOINT ─────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'batch') {
     verify_csrf();
@@ -125,6 +148,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
 
     // Schema migrations (column additions) — ['table', 'column', 'sql']
     $columns = [
+        'email_announcements' => ['email_preferences', 'announcements', 'ALTER TABLE email_preferences ADD COLUMN announcements TINYINT(1) NOT NULL DEFAULT 1'],
+        'declared_country' => ['admin_users', 'declared_country', 'ALTER TABLE admin_users ADD COLUMN declared_country CHAR(2) DEFAULT NULL'],
+        'requires_email_verification' => ['admin_users', 'requires_email_verification', 'ALTER TABLE admin_users ADD COLUMN requires_email_verification TINYINT(1) NOT NULL DEFAULT 0'],
+        'registration_country' => ['admin_users', 'registration_country', 'ALTER TABLE admin_users ADD COLUMN registration_country CHAR(2) DEFAULT NULL'],
+        'email_verified_at' => ['admin_users', 'email_verified_at', 'ALTER TABLE admin_users ADD COLUMN email_verified_at DATETIME DEFAULT NULL'],
+        'auth_version' => ['admin_users', 'auth_version', 'ALTER TABLE admin_users ADD COLUMN auth_version INT UNSIGNED NOT NULL DEFAULT 0'],
         'message_read_at' => ['direct_messages', 'read_at', 'ALTER TABLE direct_messages ADD COLUMN read_at DATETIME DEFAULT NULL AFTER is_read'],
         'is_public'        => ['miniatures',  'is_public',      "ALTER TABLE miniatures ADD COLUMN is_public TINYINT(1) NOT NULL DEFAULT 1 AFTER emotional_rating"],
         'views'            => ['miniatures',  'views',          "ALTER TABLE miniatures ADD COLUMN views INT UNSIGNED NOT NULL DEFAULT 0 AFTER is_public"],
@@ -151,6 +180,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
 
     // Table migrations — checked via information_schema.tables
     $tables = [
+        'email_delivery_settings' => "CREATE TABLE email_delivery_settings (
+            id TINYINT UNSIGNED PRIMARY KEY,
+            automatic TINYINT(1) NOT NULL DEFAULT 1,
+            message_delay INT UNSIGNED NOT NULL DEFAULT 600,
+            interaction_delay INT UNSIGNED NOT NULL DEFAULT 300,
+            category_interval INT UNSIGNED NOT NULL DEFAULT 3600
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'support_access_log' => "CREATE TABLE support_access_log (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    actor_id INT UNSIGNED NOT NULL,
+    target_id INT UNSIGNED NOT NULL,
+    mode ENUM('preview','support') NOT NULL,
+    reason VARCHAR(500) NOT NULL,
+    started_at DATETIME NOT NULL,
+    expires_at DATETIME NOT NULL,
+    ended_at DATETIME DEFAULT NULL,
+    KEY idx_support_actor (actor_id,started_at),
+    KEY idx_support_target (target_id,started_at),
+    FOREIGN KEY (actor_id) REFERENCES admin_users(id),
+    FOREIGN KEY (target_id) REFERENCES admin_users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'email_digest_state' => "CREATE TABLE email_digest_state (
+    user_id INT UNSIGNED PRIMARY KEY,
+    next_digest_at DATETIME NOT NULL,
+    last_sent_at DATETIME DEFAULT NULL,
+    FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'email_campaigns' => "CREATE TABLE email_campaigns (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    created_by INT UNSIGNED NOT NULL,
+    subject VARCHAR(180) NOT NULL,
+    body_html MEDIUMTEXT NOT NULL,
+    status ENUM('draft','queued','completed','cancelled') NOT NULL DEFAULT 'draft',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    queued_at DATETIME DEFAULT NULL,
+    FOREIGN KEY (created_by) REFERENCES admin_users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'email_campaign_recipients' => "CREATE TABLE email_campaign_recipients (
+    campaign_id INT UNSIGNED NOT NULL,
+    user_id INT UNSIGNED NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    status ENUM('pending','sent','skipped','failed') NOT NULL DEFAULT 'pending',
+    attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    available_at DATETIME NOT NULL,
+    sent_at DATETIME DEFAULT NULL,
+    PRIMARY KEY (campaign_id,user_id),
+    KEY idx_campaign_due (status,available_at),
+    FOREIGN KEY (campaign_id) REFERENCES email_campaigns(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'auth_email_tokens' => "CREATE TABLE auth_email_tokens (
+            token_hash CHAR(64) PRIMARY KEY,
+            user_id INT UNSIGNED NOT NULL,
+            purpose ENUM('verify_email','reset_password') NOT NULL,
+            email VARCHAR(255) NOT NULL,
+            auth_version INT UNSIGNED NOT NULL,
+            expires_at DATETIME NOT NULL,
+            KEY idx_auth_email_user (user_id, purpose),
+            KEY idx_auth_email_expiry (expires_at),
+            FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
         'miniature_ratings' => "CREATE TABLE miniature_ratings (
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             miniature_id INT UNSIGNED NOT NULL,
@@ -244,6 +334,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'apply
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             KEY idx_rate_limits_updated (updated_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'email_preferences' => "CREATE TABLE email_preferences (
+    user_id INT UNSIGNED PRIMARY KEY,
+    enabled TINYINT(1) NOT NULL DEFAULT 1,
+    messages TINYINT(1) NOT NULL DEFAULT 1,
+    likes TINYINT(1) NOT NULL DEFAULT 1,
+    comments TINYINT(1) NOT NULL DEFAULT 1,
+    ratings TINYINT(1) NOT NULL DEFAULT 1,
+    follows TINYINT(1) NOT NULL DEFAULT 1,
+    registrations TINYINT(1) NOT NULL DEFAULT 1,
+    FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'email_notification_queue' => "CREATE TABLE email_notification_queue (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL,
+    event_type VARCHAR(20) NOT NULL,
+    source_key CHAR(64) NOT NULL,
+    target_id INT UNSIGNED DEFAULT NULL,
+    notification_id INT UNSIGNED DEFAULT NULL,
+    status ENUM('pending','sent','cancelled','failed') NOT NULL DEFAULT 'pending',
+    attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    available_at DATETIME NOT NULL,
+    sent_at DATETIME DEFAULT NULL,
+    UNIQUE KEY uq_email_event (user_id,event_type,source_key),
+    KEY idx_email_due (status,available_at),
+    KEY idx_email_recipient (user_id,event_type,sent_at),
+    FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE,
+    FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
         'miniature_views' => "CREATE TABLE miniature_views (
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             miniature_id INT UNSIGNED NOT NULL,
@@ -607,6 +725,8 @@ require_once __DIR__ . '/../includes/header_admin.php';
         <p class="maint-hero-sub">Diagnóstico, otimização e migração. Algumas ações alteram o banco ou apagam arquivos — use com atenção.</p>
     </div>
 </div>
+
+<?php require __DIR__ . '/../includes/maintenance_email.php'; ?>
 
 <div class="maint-diag">
     <span class="maint-chip <?= empty($db_error) ? 'is-ok' : 'is-bad' ?>">

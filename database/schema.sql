@@ -86,6 +86,11 @@ CREATE TABLE IF NOT EXISTS admin_users (
     slug VARCHAR(50) NOT NULL UNIQUE,
     display_name VARCHAR(100) NOT NULL DEFAULT '',
     email VARCHAR(255) NOT NULL DEFAULT '' UNIQUE,
+    email_verified_at DATETIME DEFAULT NULL,
+    auth_version INT UNSIGNED NOT NULL DEFAULT 0,
+    requires_email_verification TINYINT(1) NOT NULL DEFAULT 0,
+    registration_country CHAR(2) DEFAULT NULL,
+    declared_country CHAR(2) DEFAULT NULL,
     password_hash VARCHAR(255) NOT NULL,
     bio TEXT DEFAULT NULL,
     is_banned TINYINT(1) NOT NULL DEFAULT 0,
@@ -93,6 +98,80 @@ CREATE TABLE IF NOT EXISTS admin_users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 -- Miniature Comments (social module — Phase 1)
+CREATE TABLE IF NOT EXISTS email_preferences (
+    user_id INT UNSIGNED PRIMARY KEY,
+    enabled TINYINT(1) NOT NULL DEFAULT 1,
+    messages TINYINT(1) NOT NULL DEFAULT 1,
+    likes TINYINT(1) NOT NULL DEFAULT 1,
+    comments TINYINT(1) NOT NULL DEFAULT 1,
+    ratings TINYINT(1) NOT NULL DEFAULT 1,
+    follows TINYINT(1) NOT NULL DEFAULT 1,
+    registrations TINYINT(1) NOT NULL DEFAULT 1,
+    announcements TINYINT(1) NOT NULL DEFAULT 1,
+    FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS email_delivery_settings (
+    id TINYINT UNSIGNED PRIMARY KEY,
+    automatic TINYINT(1) NOT NULL DEFAULT 1,
+    message_delay INT UNSIGNED NOT NULL DEFAULT 600,
+    interaction_delay INT UNSIGNED NOT NULL DEFAULT 300,
+    category_interval INT UNSIGNED NOT NULL DEFAULT 3600
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS email_digest_state (
+    user_id INT UNSIGNED PRIMARY KEY,
+    next_digest_at DATETIME NOT NULL,
+    last_sent_at DATETIME DEFAULT NULL,
+    FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS support_access_log (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    actor_id INT UNSIGNED NOT NULL,
+    target_id INT UNSIGNED NOT NULL,
+    mode ENUM('preview','support') NOT NULL,
+    reason VARCHAR(500) NOT NULL,
+    started_at DATETIME NOT NULL,
+    expires_at DATETIME NOT NULL,
+    ended_at DATETIME DEFAULT NULL,
+    KEY idx_support_actor (actor_id,started_at),
+    KEY idx_support_target (target_id,started_at),
+    FOREIGN KEY (actor_id) REFERENCES admin_users(id),
+    FOREIGN KEY (target_id) REFERENCES admin_users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS email_campaigns (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    created_by INT UNSIGNED NOT NULL,
+    subject VARCHAR(180) NOT NULL,
+    body_html MEDIUMTEXT NOT NULL,
+    status ENUM('draft','queued','completed','cancelled') NOT NULL DEFAULT 'draft',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    queued_at DATETIME DEFAULT NULL,
+    FOREIGN KEY (created_by) REFERENCES admin_users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS email_campaign_recipients (
+    campaign_id INT UNSIGNED NOT NULL,
+    user_id INT UNSIGNED NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    status ENUM('pending','sent','skipped','failed') NOT NULL DEFAULT 'pending',
+    attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    available_at DATETIME NOT NULL,
+    sent_at DATETIME DEFAULT NULL,
+    PRIMARY KEY (campaign_id,user_id),
+    KEY idx_campaign_due (status,available_at),
+    FOREIGN KEY (campaign_id) REFERENCES email_campaigns(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS auth_email_tokens (
+    token_hash CHAR(64) PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL,
+    purpose ENUM('verify_email','reset_password') NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    auth_version INT UNSIGNED NOT NULL,
+    expires_at DATETIME NOT NULL,
+    KEY idx_auth_email_user (user_id, purpose),
+    KEY idx_auth_email_expiry (expires_at),
+    FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS miniature_comments (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     miniature_id INT UNSIGNED NOT NULL,
@@ -261,3 +340,21 @@ CREATE INDEX idx_tags_user ON tags (user_id);
 CREATE INDEX idx_wishlist_user ON wishlist (user_id);
 ALTER TABLE miniatures
 ADD FULLTEXT INDEX ft_miniatures_search (name, manufacturer, model);
+
+CREATE TABLE IF NOT EXISTS email_notification_queue (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL,
+    event_type VARCHAR(20) NOT NULL,
+    source_key CHAR(64) NOT NULL,
+    target_id INT UNSIGNED DEFAULT NULL,
+    notification_id INT UNSIGNED DEFAULT NULL,
+    status ENUM('pending','sent','cancelled','failed') NOT NULL DEFAULT 'pending',
+    attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    available_at DATETIME NOT NULL,
+    sent_at DATETIME DEFAULT NULL,
+    UNIQUE KEY uq_email_event (user_id,event_type,source_key),
+    KEY idx_email_due (status,available_at),
+    KEY idx_email_recipient (user_id,event_type,sent_at),
+    FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE,
+    FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

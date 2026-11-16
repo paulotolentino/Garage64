@@ -47,6 +47,7 @@ try {
 $rating_msg = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['public_rating'])) {
     verify_csrf();
+    if (is_logged_in()) require_social_access(current_user_id());
     $submitted = (int) $_POST['public_rating'];
     // IP real do visitante via client_ip(): atrás da Cloudflare resolve o
     // CF-Connecting-IP (validado contra os ranges oficiais); caso contrário cai

@@ -195,6 +195,138 @@ já reflita o IP real em toda a aplicação.
 
 ## Uso
 
+### Visualização comum e suporte
+
+Superadmins encontram em **Meu Perfil** os botões **Ver como usuário comum** e
+**Acessar conta para suporte**. O menu Ferramentas também oferece esses acessos,
+e a gestão de usuários tem um botão de suporte em cada conta comum.
+
+O primeiro modo mostra os próprios dados sem privilégios administrativos. O
+segundo permite consultar o painel de uma conta específica, incluindo contas
+banidas, sem assumir privilégios de outro superadmin. Ambos são somente leitura:
+alterações por POST são bloqueadas no servidor; mensagens e notificações não são
+marcadas como lidas, visitas não são contabilizadas e o processamento automático
+de e-mails não roda nessa sessão. Nenhuma notificação de acesso é enviada ao
+usuário. As ações existentes continuam com suas regras normais fora desse modo.
+
+Uma faixa identifica o modo e permite **Voltar à minha conta**. A visualização
+vale para todas as abas da sessão e expira em 30 minutos. A identidade original
+fica apenas na sessão do servidor; nenhum login persistente do usuário atendido
+é criado. Privilégios e versão de autenticação do administrador são revalidados
+em cada requisição. Revogação de privilégios ou troca de senha encerra o acesso.
+O registro de administrador, conta, motivo, início e fim fica em
+**Acesso de suporte → Registro interno de acessos**, sem conteúdo de mensagens.
+Execute **Aplicar índices & migrations** para criar `support_access_log`.
+
+### Avisos por e-mail e proteção de cadastro
+
+Execute **Aplicar índices & migrations** após publicar. As estruturas novas estão
+no único `database/schema.sql`, e o botão atualiza instalações existentes.
+
+Não é necessário terminal nem cron. Em **Manutenção → Avisos por e-mail**, o
+superadmin liga/desliga o processamento automático e usa
+**Processar próximo lote** para enviar manualmente. As ações usam POST e CSRF.
+Uma trava MySQL impede dois processamentos simultâneos.
+
+O processamento automático ocorre após requisições PHP do site, um destinatário
+de resumo e um de comunicado por
+acesso. Em PHP-FPM, a resposta é encerrada antes do envio quando disponível.
+Não existe um relógio independente: sem acessos, avisos e novas tentativas ficam
+pendentes até o próximo acesso ou processamento manual na Manutenção. Em outros
+ambientes PHP, o envio pode aumentar a duração da requisição.
+
+Avisos de novos cadastros são destinados aos superadmins. Curtidas, comentários,
+respostas, menções, estrelas e seguidores são destinados ao dono/interessado.
+As preferências ficam em **Configurações → Preferências de e-mail**. Confirmação
+e recuperação de senha não são desativadas por essas preferências. Os avisos
+só são enviados a destinatários com e-mail confirmado e conta não banida.
+
+Atividades são reunidas em um único resumo semanal por usuário, incluindo apenas
+as categorias habilitadas nas preferências. O primeiro período começa na primeira
+atividade e dura 7 dias; após um envio, o próximo só pode ocorrer 7 dias depois.
+Sem atividade válida, nenhum e-mail é enviado. Conversas já lidas são excluídas.
+Os antigos tempos por categoria não são mais usados. Pendências existentes
+entram no primeiro período semanal, sem disparo em massa imediato na atualização.
+Falhas têm até 5 tentativas, espaçadas por 15 minutos.
+
+### Comunicados para a comunidade
+
+Superadmins acessam **Ferramentas → Comunicados** para escrever e-mails com o
+editor Quill (negrito, itálico, sublinhado, títulos, listas, alinhamento, links e
+imagens). O editor é carregado via CDN, na versão fixa 2.0.3. Imagens JPG/PNG/WebP
+de até 5 MB e 24 megapixels são validadas pelo MIME, redimensionadas e regravadas
+em JPG/PNG em `uploads/campaigns/`, com no máximo 1600 pixels por dimensão para
+compatibilidade em e-mails. HTML recebido é sanitizado no servidor; scripts,
+atributos de eventos, URLs executáveis e imagens externas/base64 são removidos.
+
+Há rascunhos, prévia desktop/mobile, envio de teste apenas ao próprio admin,
+confirmação explícita antes do disparo e acompanhamento por destinatário.
+Ao confirmar, cria-se uma lista única de destinatários ativos, com e-mail
+confirmado, recebimento global habilitado e comunicados habilitados. Banimentos,
+mudanças de e-mail e preferências são conferidos novamente em cada envio.
+Teste e prévia não enfileiram a campanha. Rascunhos podem ser editados; campanhas
+iniciadas ficam congeladas. Cancelar impede os próximos envios, mas não recolhe
+e-mails já enviados ou em trânsito. Um erro após aceitação pelo SendGrid e antes
+do registro no banco pode resultar em repetição; não há garantia de exactly-once.
+
+O processamento pode continuar pela própria tela (um destinatário por vez), pela
+Manutenção ou nos acessos normais ao site, sem terminal. Pausar o processamento
+na tela não cancela a campanha nem desliga o automático. Para impedir próximos
+envios, use **Interromper campanha**. Desativar **Comunicados e novidades** nas
+preferências impede esses e-mails, sem alterar os resumos semanais habilitados.
+
+Cadastros têm campo-armadilha invisível, tempo mínimo de preenchimento e rate
+limit. Contas novas precisam confirmar o e-mail antes de enviar mensagens,
+curtir, comentar ou seguir manualmente. Contas anteriores não são bloqueadas
+retroativamente por essa regra. Os domínios `formtests.info` e
+`immenseignite.info`, presentes nos cadastros indesejados observados, são
+bloqueados por padrão; `BLOCKED_SIGNUP_DOMAINS` permite ajustar a lista. Não há
+bloqueio genérico de Gmail, Mail.ru, nacionalidades ou nomes de usuário.
+
+Para proteção mais forte, configure no arquivo local `TURNSTILE_SITE_KEY` e
+`TURNSTILE_SECRET_KEY`, com widget autorizado para o domínio do `APP_URL`.
+O desafio é validado no servidor (incluindo hostname e ação `signup`). Sem
+chaves, continuam os controles locais, que não eliminam bots sofisticados.
+
+O cadastro solicita o país de residência (lista ISO 3166-1, validada no servidor)
+e também registra separadamente o país aproximado pelo IP. O painel de usuários
+exibe os dois, sinaliza diferenças sem banir automaticamente e mostra o estado
+de confirmação do e-mail. Usa o mesmo `geo_lookup` das estatísticas, com cabeçalho
+Cloudflare confiável ou o fallback `GEO_LOOKUP_URL` já configurado. VPNs/proxies
+podem alterar o resultado. Não infere país pelo e-mail, nem preenche cadastros
+antigos sem evidência. Apenas os dois códigos de país são armazenados no perfil.
+
+### E-mails de conta (SendGrid)
+
+Adicione ao `includes/config.local.php`, preservando as configurações existentes:
+
+```php
+define('APP_URL', 'https://garage64.online');
+define('SENDGRID_API_KEY', 'SUA_CHAVE_SENDGRID');
+define('MAIL_FROM_EMAIL', 'notificacoes@garage64.online');
+define('MAIL_FROM_NAME', 'Garage64');
+```
+
+Não duplique constantes que já existam no arquivo. A chave também pode vir da
+variável de ambiente `SENDGRID_API_KEY`. O arquivo local já está no `.gitignore`.
+Veja `includes/config.local.example.php` como referência, sem credenciais reais.
+O remetente/domínio precisa estar autorizado no SendGrid. O servidor precisa de
+PHP cURL com certificados TLS válidos e acesso HTTPS à API do SendGrid.
+
+Após publicar, execute **Aplicar índices & migrations**. Não há SQL adicional.
+Novos cadastros recebem um link de confirmação com validade de 24 horas. Contas
+existentes mantêm o acesso e recebem um aviso no painel para confirmar o e-mail.
+Alterar o endereço no perfil remove a confirmação e envia outro link.
+O acesso permanece disponível enquanto a confirmação estiver pendente.
+
+**Esqueci minha senha** envia um link válido por 30 minutos. Os links são de uso
+único, armazenados apenas como hash e consumidos por POST, evitando confirmação
+por scanners de e-mail. Redefinir a senha invalida sessões, logins persistentes e
+outros links pendentes. A resposta de recuperação não informa se a conta existe.
+Os templates HTML e texto estão em `includes/email_templates.php`, sem Dynamic
+Templates. HTTP 202 significa aceitação pelo SendGrid, não entrega garantida;
+confira a atividade no painel do provedor em caso de problemas.
+
 ### Atualização de interações, mensagens e login persistente
 
 Depois de publicar os arquivos, entre como superadmin em `/admin/manutencao` e

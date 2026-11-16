@@ -27,6 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
         exit;
     }
     verify_csrf();
+    require_social_access(current_user_id());
     $me = current_user_id();
     if ($me !== $uid) { // nunca seguir a si mesmo
         if ($_POST['action'] === 'follow') {

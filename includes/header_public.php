@@ -43,7 +43,7 @@
     <link rel="icon" type="image/svg+xml" href="/assets/img/favicon-cart.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-    <link rel="stylesheet" href="/assets/css/style.css?v=20261115">
+    <link rel="stylesheet" href="/assets/css/style.css?v=20261115-support">
 </head>
 <body class="public-layout <?= $body_class ?? '' ?>">
 <?php
@@ -118,3 +118,4 @@ $g64_initial = mb_strtoupper(mb_substr($g64_name !== '' ? $g64_name : ($g64_slug
     </div>
 </nav>
 <main class="container py-4">
+<?php require __DIR__.'/view_mode_banner.php'; ?>

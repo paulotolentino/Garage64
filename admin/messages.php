@@ -36,6 +36,7 @@ try {
     $peer = $st->fetch() ?: null;
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         verify_csrf();
+        if (($_POST['action'] ?? '') !== 'mark_seen') require_social_access($me);
         if (($_POST['action'] ?? '') === 'mark_seen') {
             header('Content-Type: application/json; charset=utf-8');
             $ids = array_values(array_unique(array_filter(array_map('intval', (array) ($_POST['message_ids'] ?? [])), static fn($id) => $id > 0)));
@@ -59,6 +60,9 @@ try {
         elseif (rate_limit_exceeded('message:user:' . $me, 30, 300)) $error = 'Muitas mensagens. Aguarde alguns minutos.';
         else {
             db()->prepare('INSERT INTO direct_messages (sender_id, recipient_id, body) VALUES (?, ?, ?)')->execute([$me, $peer_id, $body]);
+            $message_id=(int)db()->lastInsertId();
+            require_once __DIR__.'/../includes/email_notifications.php';
+            queue_notification_email($peer_id,'message','message:'.$message_id,$me);
             rate_limit_hit('message:user:' . $me, 300);
             // One unread conversation notice, instead of one notice per message.
             try {

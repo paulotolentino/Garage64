@@ -7,7 +7,7 @@
     <link rel="icon" type="image/svg+xml" href="<?= h(APP_URL) ?>/assets/img/favicon-cart.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-    <link rel="stylesheet" href="<?= h(APP_URL) ?>/assets/css/style.css?v=20261115c">
+    <link rel="stylesheet" href="<?= h(APP_URL) ?>/assets/css/style.css?v=20261115-support">
 </head>
 <body class="admin-layout">
 <?php $unread_notifs = get_unread_notifications_count(current_user_id()); ?>
@@ -61,6 +61,7 @@
         </a>
 
         <div class="admin-nav-section">Configurações</div>
+        <a href="/admin/email-preferences" class="admin-nav-link <?= $is('email-preferences.php') ?>"><i class="fa fa-envelope"></i>Preferências de e-mail</a>
         <a href="<?= h(APP_URL) ?>/admin/categories" class="admin-nav-link <?= $is('categories.php') ?>">
             <i class="fa fa-tags"></i>Categorias
         </a>
@@ -70,6 +71,9 @@
 
         <div class="admin-nav-section">Ferramentas</div>
         <?php if (is_superadmin()): ?>
+        <form method="post" action="/admin/view-mode" class="m-0"><?= csrf_field() ?><input type="hidden" name="mode" value="preview"><button class="admin-nav-link view-mode-nav-button" type="submit"><i class="fa fa-user" aria-hidden="true"></i>Ver como usuário comum</button></form>
+        <a href="/admin/support" class="admin-nav-link <?= $is('support.php') ?>"><i class="fa fa-headset"></i>Acesso de suporte</a>
+        <a href="/admin/announcements" class="admin-nav-link <?= $is('announcements.php') ?>"><i class="fa fa-bullhorn"></i>Comunicados</a>
         <a href="<?= h(APP_URL) ?>/admin/manutencao" class="admin-nav-link <?= $is('manutencao.php') ?>">
             <i class="fa fa-wrench"></i>Manutenção
         </a>
@@ -100,6 +104,17 @@
 
 <!-- Main content -->
 <main class="admin-main">
+<?php require __DIR__.'/view_mode_banner.php'; ?>
+<?php
+try {
+    $email_state = db()->prepare('SELECT email_verified_at FROM admin_users WHERE id = ?');
+    $email_state->execute([current_user_id()]);
+    $email_account = $email_state->fetch();
+    if ($email_account && !$email_account['email_verified_at']): ?>
+<div class="alert alert-warning d-flex align-items-center justify-content-between gap-3 flex-wrap" role="status"><span>Seu endereço de e-mail ainda não foi confirmado.</span><a href="/verify-email" class="text-reset fw-semibold">Confirmar e-mail</a></div>
+<?php endif;
+} catch (Throwable $e) { /* Legacy installations need the email migrations first. */ }
+?>
 <?php
 $flash = get_flash();
 if ($flash): ?>

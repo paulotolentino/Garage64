@@ -69,6 +69,7 @@
     list.scrollTop = list.scrollHeight;
     let seeing = false;
     async function markVisible() {
+        if (document.documentElement.dataset.readonlyMode==='1') return;
         if (seeing || document.hidden || !document.hasFocus() || document.querySelector('.modal.show, .admin-sidebar-overlay.visible')) return;
         const root = list.getBoundingClientRect();
         const rows = [...list.querySelectorAll('[data-incoming="1"]:not([data-seen="1"])')].filter(row => {

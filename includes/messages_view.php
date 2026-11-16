@@ -54,5 +54,5 @@
         <div class="modal-body"><label for="conversation-search" class="form-label">Nome ou @usuário</label><input type="search" id="conversation-search" class="form-control" autocomplete="off" maxlength="100" placeholder="Quem você procura?"><p id="conversation-search-status" class="inbox-search-status" role="status">Digite pelo menos 2 caracteres.</p><div id="conversation-search-results"></div></div>
     </div></div>
 </div>
-<script src="/assets/js/messages.js?v=20261115c" defer></script>
+<script src="/assets/js/messages.js?v=20261115-support" defer></script>
 <?php require_once __DIR__ . '/footer_admin.php'; ?>

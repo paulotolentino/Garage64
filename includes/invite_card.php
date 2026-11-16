@@ -9,7 +9,7 @@ $invite_slug = isset($g64_slug) && $g64_slug !== '' ? $g64_slug : current_user_s
 if ($invite_slug === '') return;
 
 $invite_link = rtrim(APP_URL, '/') . '/register?ref=' . rawurlencode($invite_slug);
-$invite_msg  = 'Montei minha garagem de miniaturas no ' . APP_NAME . '. Crie a sua e vamos trocar figurinhas: ' . $invite_link;
+$invite_msg  = 'Montei minha garagem de miniaturas no ' . APP_NAME . '. Crie a sua você também: ' . $invite_link;
 $invite_wa   = 'https://wa.me/?text=' . rawurlencode($invite_msg);
 ?>
 <section class="invite-card">

@@ -40,6 +40,13 @@ if (!defined('UPLOADS_URL')) {
 }
 
 // Session name
+if (!defined('SENDGRID_API_KEY')) define('SENDGRID_API_KEY', getenv('SENDGRID_API_KEY') ?: '');
+if (!defined('MAIL_FROM_EMAIL')) define('MAIL_FROM_EMAIL', 'notificacoes@garage64.online');
+if (!defined('MAIL_FROM_NAME')) define('MAIL_FROM_NAME', 'Garage64');
+if (!defined('TURNSTILE_SITE_KEY')) define('TURNSTILE_SITE_KEY', getenv('TURNSTILE_SITE_KEY') ?: '');
+if (!defined('TURNSTILE_SECRET_KEY')) define('TURNSTILE_SECRET_KEY', getenv('TURNSTILE_SECRET_KEY') ?: '');
+if (!defined('BLOCKED_SIGNUP_DOMAINS')) define('BLOCKED_SIGNUP_DOMAINS', ['formtests.info', 'immenseignite.info']);
+
 if (!defined('SESSION_NAME')) {
     define('SESSION_NAME', 'garage64_session');
 }

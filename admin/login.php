@@ -20,10 +20,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($result === 'banned') {
             $error = 'Sua conta foi suspensa. Entre em contato com o administrador.';
         } else {
-            $error = 'Usuário ou senha incorretos.';
+            $error = 'Usuário, e-mail ou senha incorretos.';
         }
     } else {
-        $error = 'Preencha usuário e senha.';
+        $error = 'Preencha seu usuário ou e-mail e a senha.';
     }
 }
 ?>
@@ -86,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="auth-form-head">
                 <p class="lp-eyebrow">Acessar conta</p>
                 <h2 class="auth-form-title">Entrar na garagem</h2>
-                <p class="auth-form-lead">Use seu usuário e senha para continuar.</p>
+                <p class="auth-form-lead">Entre com seu usuário ou e-mail e sua senha.</p>
             </div>
 
             <?php if ($error): ?>
@@ -98,15 +98,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <form method="post" class="auth-form">
                 <?= csrf_field() ?>
                 <div class="auth-field">
-                    <label for="username">Usuário</label>
+                    <label for="username">Usuário ou e-mail</label>
                     <input type="text" id="username" name="username" class="amf-input"
-                           autocomplete="username" required autofocus>
+                           autocomplete="username" autocapitalize="none" spellcheck="false"
+                           value="<?= e($_POST['username'] ?? '') ?>" required autofocus>
                 </div>
                 <div class="auth-field">
                     <label for="password">Senha</label>
                     <input type="password" id="password" name="password" class="amf-input"
                            autocomplete="current-password" required>
                 </div>
+                <p class="text-end"><a href="/forgot-password">Esqueci minha senha</a></p>
                 <button type="submit" class="md-btn md-btn-primary auth-submit">
                     <i class="fa fa-right-to-bracket"></i>Entrar
                 </button>

@@ -2,6 +2,7 @@
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
+require_once __DIR__ . '/includes/countries.php';
 
 if (is_logged_in()) {
     redirect('/admin/');
@@ -9,6 +10,8 @@ if (is_logged_in()) {
 
 $error   = '';
 $success = false;
+session_start_once();
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') $_SESSION['signup_started'] = time();
 
 // ── Convite: quem indicou (via ?ref=slug ou campo oculto no POST) ────────────
 // O novo colecionador passa a seguir quem o convidou (loop social), e o
@@ -25,14 +28,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password     = $_POST['password'] ?? '';
     $password2    = $_POST['password2'] ?? '';
 
-    if ($password !== $password2) {
+    require_once __DIR__ . '/includes/signup_protection.php';
+    if (!signup_request_allowed()) {
+        $error = 'Não foi possível concluir o cadastro. Atualize a página e tente novamente.';
+    } elseif ($password !== $password2) {
         $error = 'As senhas não coincidem.';
     } else {
-        $result = register_user($username, $email, $password, $display_name);
+        $result = register_user($username, $email, $password, $display_name, (string)($_POST['country'] ?? ''));
         if ($result === true) {
             // Auto-login: cria a sessão imediatamente após o cadastro,
             // reaproveitando o mesmo fluxo seguro do login tradicional.
             login($username, $password);
+            require_once __DIR__ . '/includes/account_email.php';
+            try {
+                $sent = request_account_email(current_user_id(), 'verify_email');
+            } catch (Throwable $e) { $sent = false; error_log('Garage64 verification email unavailable.'); }
+            flash($sent ? 'Conta criada. Confira seu e-mail para confirmar o endereço.' : 'Conta criada. Solicite a confirmação de e-mail pelo painel.', $sent ? 'success' : 'warning');
 
             // Loop de convite: novo usuário segue quem o convidou + notifica.
             if ($inviter && (int) $inviter['id'] !== current_user_id()) {
@@ -136,6 +147,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php endif; ?>
 
             <form method="post" class="auth-form">
+                <div style="position:absolute;left:-10000px" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" tabindex="-1" autocomplete="off"></div>
+                <?php if (TURNSTILE_SITE_KEY !== ''): ?><div class="cf-turnstile" data-sitekey="<?= e(TURNSTILE_SITE_KEY) ?>" data-action="signup"></div><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script><?php endif; ?>
                 <?= csrf_field() ?>
                 <?php if ($invite_ref !== ''): ?><input type="hidden" name="ref" value="<?= e($invite_ref) ?>"><?php endif; ?>
                 <div class="auth-field">
@@ -160,6 +173,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <input type="text" id="display_name" name="display_name" class="amf-input"
                            value="<?= e($_POST['display_name'] ?? '') ?>"
                            placeholder="Como seu nome aparecerá publicamente">
+                </div>
+                <div class="auth-field">
+                    <label for="country">País onde você mora</label>
+                    <select id="country" name="country" class="amf-input" autocomplete="country" required>
+                        <option value="">Selecione seu país</option>
+                        <?php foreach(signup_countries() as $code=>$label): ?><option value="<?= e($code) ?>" <?= ($_POST['country'] ?? '')===$code ? 'selected' : '' ?>><?= e($label) ?></option><?php endforeach; ?>
+                    </select>
                 </div>
                 <div class="auth-field">
                     <label for="password">Senha</label>

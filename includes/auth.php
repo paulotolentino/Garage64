@@ -1,7 +1,10 @@
 <?php
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/view_mode.php';
 
 function session_start_once(): void {
+    static $checked = false;
+    if ($checked && session_status() === PHP_SESSION_ACTIVE) return;
     if (session_status() === PHP_SESSION_NONE) {
         session_name(SESSION_NAME);
         // Harden the session cookie (M1): block JS access (httponly), limit
@@ -15,10 +18,31 @@ function session_start_once(): void {
             'samesite' => 'Lax',
         ]);
         session_start();
-        if (empty($_SESSION['user_id']) && !empty($_COOKIE['garage64_remember'])) {
-            restore_persistent_login();
+    }
+    $checked = true;
+    if (!empty($_SESSION['view_context'])) validate_view_mode();
+    if (!empty($_SESSION['user_id']) && empty($_SESSION['view_context'])) {
+        require_once __DIR__ . '/db.php';
+        try {
+            $check = db()->prepare('SELECT auth_version, is_banned FROM admin_users WHERE id = ?');
+            $check->execute([(int) $_SESSION['user_id']]);
+            $account = $check->fetch();
+            if (!$account || $account['is_banned'] || (int) $account['auth_version'] !== (int) ($_SESSION['auth_version'] ?? 0)) {
+                $_SESSION = [];
+                session_regenerate_id(true);
+            }
+        } catch (Throwable $e) {
+            // Allow the superadmin to run migrations on legacy databases.
+            if (!($e instanceof PDOException && $e->getCode() === '42S22')) $_SESSION = [];
+            error_log('Garage64 session validation unavailable.');
         }
     }
+    if (empty($_SESSION['user_id']) && !empty($_COOKIE['garage64_remember'])) {
+        restore_persistent_login();
+    }
+    require_once __DIR__ . '/email_notifications.php';
+    schedule_notification_email_processing();
+    enforce_view_mode_readonly();
 }
 
 function remember_cookie(string $value, int $expires): void {
@@ -52,6 +76,7 @@ function restore_persistent_login(): void {
 }
 
 function set_authenticated_user(array $user): void {
+    $_SESSION['auth_version'] = (int) ($user['auth_version'] ?? 0);
     $_SESSION['user_id'] = (int) $user['id'];
     $_SESSION['user_slug'] = $user['slug'] ?? $user['username'];
     $_SESSION['is_superadmin'] = (bool) ($user['is_superadmin'] ?? false);
@@ -60,6 +85,7 @@ function set_authenticated_user(array $user): void {
 }
 
 function issue_persistent_login(int $user_id): void {
+    if (!empty($_SESSION['view_context'])) return;
     try {
         $selector = bin2hex(random_bytes(12));
         $token = bin2hex(random_bytes(32));
@@ -94,7 +120,7 @@ function current_user_name(): string {
 
 function is_superadmin(): bool {
     session_start_once();
-    return !empty($_SESSION['is_superadmin']);
+    return empty($_SESSION['view_context']) && !empty($_SESSION['is_superadmin']);
 }
 
 function require_login(): void {
@@ -115,6 +141,7 @@ function require_superadmin(): void {
 /** Returns true on success, 'banned' if user is banned, false on bad credentials. */
 function login(string $username, string $password): bool|string {
     require_once __DIR__ . '/db.php';
+    $username = trim($username);
 
     // Rate limiting: throttle brute force / credential stuffing by IP and by
     // username. Both buckets are checked *before* touching the database; a block
@@ -129,10 +156,12 @@ function login(string $username, string $password): bool|string {
     }
 
     // Use SELECT * so login works even before multi-user migration columns exist
-    $stmt = db()->prepare(
-        'SELECT * FROM admin_users WHERE username = ? LIMIT 1'
-    );
-    $stmt->execute([$username]);
+    // Usernames cannot contain @, so each identifier has an unambiguous lookup.
+    $email_login = str_contains($username, '@');
+    $stmt = db()->prepare($email_login
+        ? 'SELECT * FROM admin_users WHERE email = ? LIMIT 1'
+        : 'SELECT * FROM admin_users WHERE username = ? LIMIT 1');
+    $stmt->execute([$email_login ? strtolower($username) : $username]);
     $user = $stmt->fetch();
     if (!$user || !password_verify($password, $user['password_hash'])) {
         // Count only failures, against both buckets.
@@ -143,6 +172,7 @@ function login(string $username, string $password): bool|string {
     if (!empty($user['is_banned'])) return 'banned';
     session_start_once();
     session_regenerate_id(true);
+    set_authenticated_user($user);
     $_SESSION['user_id']         = (int) $user['id'];
     $_SESSION['user_slug']       = $user['slug'] ?? $user['username'];
     $_SESSION['is_superadmin']   = (bool) ($user['is_superadmin'] ?? false);
@@ -153,8 +183,9 @@ function login(string $username, string $password): bool|string {
 }
 
 /** Returns true on success or an error string. */
-function register_user(string $username, string $email, string $password, string $display_name = ''): bool|string {
+function register_user(string $username, string $email, string $password, string $display_name = '', string $declared_country = ''): bool|string {
     require_once __DIR__ . '/db.php';
+    require_once __DIR__ . '/countries.php';
 
     // Rate limiting: cap account creation per IP (mass-signup / bot protection).
     // Checked first so a blocked client never reaches the database probes below.
@@ -166,6 +197,8 @@ function register_user(string $username, string $email, string $password, string
     $username     = trim($username);
     $email        = strtolower(trim($email));
     $display_name = trim($display_name) ?: $username;
+    $declared_country = strtoupper(trim($declared_country));
+    if (!isset(signup_countries()[$declared_country])) return 'Selecione seu país.';
 
     if (strlen($username) < 3 || strlen($username) > 30)
         return 'O usuário deve ter entre 3 e 30 caracteres.';
@@ -173,6 +206,10 @@ function register_user(string $username, string $email, string $password, string
         return 'Usuário só pode conter letras, números, _ e -.';
     if (!filter_var($email, FILTER_VALIDATE_EMAIL))
         return 'E-mail inválido.';
+    $domain = substr(strrchr($email, '@'), 1);
+    foreach (BLOCKED_SIGNUP_DOMAINS as $blocked) {
+        if ($domain === $blocked || str_ends_with($domain, '.' . $blocked)) return 'Não foi possível cadastrar este endereço de e-mail.';
+    }
     if (strlen($password) < 8)
         return 'A senha deve ter no mínimo 8 caracteres.';
 
@@ -202,12 +239,17 @@ function register_user(string $username, string $email, string $password, string
 
     $hash = password_hash($password, PASSWORD_BCRYPT);
     db()->prepare(
-        'INSERT INTO admin_users (username, slug, display_name, email, password_hash, is_superadmin, is_banned)
-         VALUES (?, ?, ?, ?, ?, 0, 0)'
-    )->execute([$username, $slug, $display_name, $email, $hash]);
+        'INSERT INTO admin_users (username, slug, display_name, email, password_hash, is_superadmin, is_banned, requires_email_verification, declared_country)
+         VALUES (?, ?, ?, ?, ?, 0, 0, 1, ?)'
+    )->execute([$username, $slug, $display_name, $email, $hash, $declared_country]);
 
     $new_user_id = (int) db()->lastInsertId();
     require_once __DIR__ . '/functions.php';
+    try {
+        $geo = geo_lookup(client_ip());
+        $country = $geo['country_code'] ?? null;
+        if ($country && preg_match('/^[A-Z]{2}$/D', $country)) db()->prepare('UPDATE admin_users SET registration_country=? WHERE id=?')->execute([$country,$new_user_id]);
+    } catch (Throwable $e) { error_log('Garage64 signup country unavailable.'); }
     try {
         foreach (db()->query('SELECT id FROM admin_users WHERE is_superadmin = 1 AND is_banned = 0')->fetchAll() as $admin) {
             create_notification((int) $admin['id'], $new_user_id, 'registration', null, null, '/u/' . rawurlencode($slug), $new_user_id);
@@ -221,6 +263,7 @@ function register_user(string $username, string $email, string $password, string
 
 function logout(): void {
     session_start_once();
+    if (!empty($_SESSION['view_context'])) close_view_audit();
     require_once __DIR__ . '/db.php';
     try {
         $selector = explode(':', (string) ($_COOKIE['garage64_remember'] ?? ''))[0];
@@ -233,6 +276,20 @@ function logout(): void {
 }
 
 // Legacy alias
+function require_social_access(int $uid): void {
+    require_once __DIR__ . '/db.php';
+    $st=db()->prepare('SELECT is_banned,requires_email_verification,email_verified_at FROM admin_users WHERE id=?');
+    $st->execute([$uid]);$user=$st->fetch();
+    if ($user && !$user['is_banned'] && (!$user['requires_email_verification'] || $user['email_verified_at'])) return;
+    http_response_code(403);
+    if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')==='Garage64') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok'=>false,'error'=>'Confirme seu e-mail pelo painel antes de interagir.']);
+        exit;
+    }
+    header('Location: /verify-email');exit;
+}
+
 function admin_username(): string {
     return current_user_name();
 }
@@ -276,7 +333,7 @@ function reserved_slugs(): array {
         'img', 'includes', 'index', 'install', 'js', 'login', 'logout', 'manutencao',
         'migrate_webp', 'mini', 'miniature', 'notifications', 'profile', 'register',
         'robots', 'setup', 'sitemap', 'static', 'tags', 'u', 'uploads', 'users',
-        'wishlist', 'messages', 'activity',
+        'wishlist', 'messages', 'activity', 'verify-email', 'reset-password', 'forgot-password', 'account-access', 'email-preferences', 'announcements', 'support', 'view-mode',
     ];
 }
 

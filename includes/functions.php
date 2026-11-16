@@ -236,6 +236,7 @@ function user_owns_miniature(int $miniature_id, int $user_id): bool {
 
 /** Adds a like (idempotent — UNIQUE constraint prevents duplicates). */
 function like_miniature(int $miniature_id, int $user_id): void {
+    require_social_access($user_id);
     db()->prepare(
         'INSERT IGNORE INTO miniature_likes (miniature_id, user_id) VALUES (?, ?)'
     )->execute([$miniature_id, $user_id]);
@@ -818,6 +819,9 @@ function submit_public_rating(int $miniature_id, int $rating, string $ip): bool 
              ON DUPLICATE KEY UPDATE rating = VALUES(rating)'
         );
         $stmt->execute([$miniature_id, $ip_hash, $rating]);
+        require_once __DIR__ . '/email_notifications.php';
+        $rated = get_miniature($miniature_id);
+        if ($rated && (int)$rated['user_id'] !== current_user_id()) queue_notification_email((int)$rated['user_id'],'rating','rating:'.$miniature_id.':'.$ip_hash,$miniature_id);
         return true;
     } catch (Throwable $e) {
         return false;
@@ -1093,6 +1097,7 @@ function get_miniature_comment(int $comment_id): ?array {
  * Returns true on success, false on validation/DB failure.
  */
 function create_miniature_comment(int $miniature_id, int $user_id, string $body, ?int $parent_id = null): bool {
+    require_social_access($user_id);
     if ($user_id <= 0) return false;
     $body = trim($body);
     if ($body === '') return false;
@@ -1295,6 +1300,7 @@ function create_notification(
     string $target_url,
     ?int $target_user_id = null
 ): bool {
+    if (function_exists('in_view_mode') && in_view_mode()) return false;
     if ($user_id <= 0 || $actor_user_id <= 0) return false;
     if ($user_id === $actor_user_id) return false; // no self-notification
     if (!in_array($type, ['comment', 'reply', 'mention', 'like', 'follow', 'registration', 'message'], true)) return false;
@@ -1327,7 +1333,13 @@ function create_notification(
             'INSERT INTO notifications (user_id, actor_user_id, type, miniature_id, target_user_id, comment_id, target_url)
              VALUES (?, ?, ?, ?, ?, ?, ?)'
         );
-        return $stmt->execute([$user_id, $actor_user_id, $type, $miniature_id, $target_user_id, $comment_id, $target_url]);
+        $ok = $stmt->execute([$user_id, $actor_user_id, $type, $miniature_id, $target_user_id, $comment_id, $target_url]);
+        if ($ok && $type !== 'message') {
+            $notification_id = (int) db()->lastInsertId();
+            require_once __DIR__ . '/email_notifications.php';
+            queue_notification_email($user_id,$type,$comment_id ? 'comment:'.$comment_id : 'notification:'.$notification_id,$type === 'message' ? $actor_user_id : $miniature_id,$notification_id);
+        }
+        return $ok;
     } catch (Throwable $e) {
         return false;
     }
@@ -1426,6 +1438,7 @@ function get_user_notifications(int $user_id, int $limit = 50): array {
 
 /** Marks a single notification as read, scoped to its owner. */
 function mark_notification_read(int $notification_id, int $user_id): bool {
+    if (function_exists('in_view_mode') && in_view_mode()) return false;
     if ($notification_id <= 0 || $user_id <= 0) return false;
     try {
         return db()->prepare(
@@ -1438,6 +1451,7 @@ function mark_notification_read(int $notification_id, int $user_id): bool {
 
 /** Marks all of a user's unread notifications as read. */
 function mark_all_notifications_read(int $user_id): bool {
+    if (function_exists('in_view_mode') && in_view_mode()) return false;
     if ($user_id <= 0) return false;
     try {
         return db()->prepare(
@@ -1564,8 +1578,9 @@ function view_source_icon(string $source, ?string $detail): string {
 
 function country_label(?string $code): string {
     if (!$code) return 'Desconhecido';
+    require_once __DIR__ . '/countries.php';
     $name = class_exists('Locale') ? (string) Locale::getDisplayRegion('-' . $code, 'pt_BR') : '';
-    return ($name !== '' && $name !== $code) ? $name : $code;
+    return ($name !== '' && $name !== $code) ? $name : (signup_countries()[$code] ?? $code);
 }
 
 function country_flag(?string $code): string {
@@ -1658,6 +1673,7 @@ function geo_lookup(string $ip): array {
  * same visitor within VIEW_DEDUPE_HOURS. Returns whether the view was counted.
  */
 function record_miniature_view(array $miniature): bool {
+    if (function_exists('in_view_mode') && in_view_mode()) return false;
     $mini_id  = (int) $miniature['id'];
     $owner_id = (int) $miniature['user_id'];
     if (is_logged_in() && current_user_id() === $owner_id) return false;

@@ -87,7 +87,7 @@ $offset = ($page - 1) * $per_page;
 // Page rows
 $list_stmt = db()->prepare(
     "SELECT id, username, slug, display_name, email, avatar,
-            is_banned, is_superadmin, is_featured, created_at,
+            is_banned, is_superadmin, is_featured, created_at, registration_country, declared_country, email_verified_at,
             (SELECT COUNT(*) FROM miniatures WHERE user_id = admin_users.id) AS mini_count
      FROM admin_users $where
      ORDER BY created_at DESC
@@ -205,6 +205,9 @@ $flash_data = get_flash();
                         </div>
                         <div class="users-card-handle">@<?= e($u['slug']) ?></div>
                         <div class="users-card-email"><?= e($u['email']) ?></div>
+                        <div class="users-card-email">País informado: <?= e(country_label($u['declared_country'])) ?></div>
+                        <div class="users-card-email" title="Localização aproximada por IP no cadastro">País por IP: <?= e(country_label($u['registration_country'])) ?><?php if($u['declared_country'] && $u['registration_country'] && $u['declared_country']!==$u['registration_country']): ?> · diferentes<?php endif; ?></div>
+                        <div class="users-card-email"><?= $u['email_verified_at'] ? 'E-mail confirmado' : 'E-mail pendente' ?></div>
                     </div>
                 </header>
 
@@ -243,6 +246,7 @@ $flash_data = get_flash();
                 </details>
 
                 <footer class="users-card-actions">
+                    <?php if(!$u['is_superadmin']): ?><form method="post" action="/admin/view-mode" class="m-0"><?= csrf_field() ?><input type="hidden" name="mode" value="support"><input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>"><input type="hidden" name="reason" value="Atendimento pela gestão de usuários"><button class="md-btn" type="submit"><i class="fa fa-headset"></i>Acesso de suporte</button></form><?php endif; ?>
                     <a href="<?= h(APP_URL) ?>/u/<?= e($u['slug']) ?>" target="_blank" rel="noopener" class="md-btn">
                         <i class="fa fa-up-right-from-square"></i>Ver garagem
                     </a>

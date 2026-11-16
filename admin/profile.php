@@ -117,14 +117,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             db()->prepare(
                 'UPDATE admin_users SET display_name = ?, bio = ?, avatar = ?, slug = ?, email = ?, password_hash = ? WHERE id = ?'
             )->execute([$display_name, $bio ?: null, $avatar ?: null, $new_slug, $new_email, $hash, current_user_id()]);
-            try {
-                db()->prepare('DELETE FROM persistent_logins WHERE user_id = ?')->execute([current_user_id()]);
-                issue_persistent_login(current_user_id());
-            } catch (Throwable $e) { error_log($e->getMessage()); }
         } else {
             db()->prepare(
                 'UPDATE admin_users SET display_name = ?, bio = ?, avatar = ?, slug = ?, email = ? WHERE id = ?'
             )->execute([$display_name, $bio ?: null, $avatar ?: null, $new_slug, $new_email, current_user_id()]);
+        }
+        if ($new_email !== strtolower($user['email']) || $hash) {
+            db()->prepare('UPDATE admin_users SET email_verified_at = IF(? = 1, NULL, email_verified_at), auth_version = auth_version + 1 WHERE id = ?')->execute([$new_email !== strtolower($user['email']) ? 1 : 0, current_user_id()]);
+            db()->prepare('DELETE FROM auth_email_tokens WHERE user_id = ?')->execute([current_user_id()]);
+            db()->prepare('DELETE FROM persistent_logins WHERE user_id = ?')->execute([current_user_id()]);
+            $_SESSION['auth_version'] = (int) ($user['auth_version'] ?? 0) + 1;
+            issue_persistent_login(current_user_id());
+            if ($new_email !== strtolower($user['email'])) {
+                require_once __DIR__ . '/../includes/account_email.php';
+                try {
+                    if (!request_account_email(current_user_id(), 'verify_email')) flash('Perfil atualizado. Solicite o reenvio da confirmação pelo painel.', 'warning');
+                } catch (Throwable $e) { error_log('Garage64 profile verification email unavailable.'); }
+            }
         }
         // Refresh session
         $_SESSION['admin_username'] = $user['username'];
@@ -173,6 +182,7 @@ require_once __DIR__ . '/../includes/header_admin.php';
         </div>
     </div>
     <div class="dash-hero-actions">
+        <?php if(is_superadmin()): ?><form method="post" action="/admin/view-mode" class="m-0"><?= csrf_field() ?><input type="hidden" name="mode" value="preview"><button type="submit" class="md-btn"><i class="fa fa-user"></i>Ver como usuário comum</button></form><a href="/admin/support" class="md-btn"><i class="fa fa-headset"></i>Acessar conta para suporte</a><?php endif; ?>
         <a href="<?= e($prof_pub_url) ?>" target="_blank" class="md-btn md-btn-primary"><i class="fa fa-warehouse"></i>Ver garagem pública</a>
         <button type="button" class="md-btn" id="btnCopyLink" data-url="<?= e($prof_pub_url) ?>"><i class="fa fa-link"></i><span>Copiar link</span></button>
     </div>
